@@ -15,6 +15,7 @@ import { listHolidays, saveHoliday, removeHoliday } from "../services/holidays.j
 import { listLeaveTypes, saveLeaveType } from "../services/leaveTypes.js";
 import { listAudit } from "../services/audit.js";
 import { getSettings, saveSettings } from "../services/settings.js";
+import { emailConfigured, sendInviteEmail } from "../services/email.js";
 import { summary } from "../services/reports.js";
 import { getUrl } from "../services/files.js";
 import { skeletonList, emptyState, errorState, openModal, openSheet, closeOverlays, statusPill, timelineHtml } from "../ui/components.js";
@@ -297,16 +298,31 @@ async function empModal(id, reload) {
       if (!id) {
         if (!qs("#e-email").value.trim()) { toast("Email required", "error"); return; }
         if (!qs("#e-name").value.trim()) { toast("Name required", "error"); return; }
+        const email = qs("#e-email").value.trim().toLowerCase();
+        const name = qs("#e-name").value.trim();
         const { token } = await inviteEmployee({
-          email: qs("#e-email").value.trim().toLowerCase(), name: qs("#e-name").value.trim(),
+          email, name,
           department: qs("#e-dept").value.trim(), position: qs("#e-pos").value.trim(),
           role: qs("#e-role").value, employeeNo: "", phone: "",
         }, user);
         const link = inviteLink(token);
-        openModal(`<h3>Account created — send this link</h3>
-          <p style="color:var(--muted);font-size:14px">The employee has <b>no password yet</b>. Copy this link and send it to them (valid 48 hours, one use). In production this is emailed automatically.</p>
+        const canEmail = emailConfigured();
+        openModal(`<h3>Account created</h3>
+          <p id="inv-status" style="color:var(--muted);font-size:14px">${canEmail
+            ? `Sending the invite email to <b class="ow">${esc(email)}</b>…`
+            : `The employee has <b>no password yet</b>. Copy this link and send it to them (valid 48 hours, one use).`}</p>
           <input class="field ow" id="inv-link" readonly value="${esc(link)}" style="margin-bottom:12px">
           <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button class="btn btn-ghost" id="inv-done">Done</button><button class="btn btn-primary" id="inv-copy">Copy link</button></div>`);
+        if (canEmail) {
+          sendInviteEmail({ to: email, name, link }).then(() => {
+            const st = qs("#inv-status");
+            if (st) st.innerHTML = `Emailed to <b class="ow">${esc(email)}</b> — valid 48 hours, one use. A copy is below just in case.`;
+          }).catch((err) => {
+            const st = qs("#inv-status");
+            if (st) st.textContent = `Couldn't email automatically (${err.message || "send failed"}). Copy the link below and send it yourself — it stays valid 48 hours.`;
+            toast("Email failed — copy the link instead", "error");
+          });
+        }
         qs("#inv-copy").onclick = async () => {
           try { await navigator.clipboard.writeText(link); toast("Link copied", "success"); }
           catch { qs("#inv-link").select(); toast("Copy the link manually", "error"); }
@@ -495,8 +511,9 @@ async function vTypes() {
 }
 
 async function vInvites() {
+  const canEmail = emailConfigured();
   view.innerHTML = `<div class="card panel"><h3>Pending invites & password resets</h3>
-    <p style="color:var(--muted);font-size:14px">Forgot-password requests from employees appear here. Copy the link and send it to them.</p>
+    <p style="color:var(--muted);font-size:14px">Forgot-password requests from employees appear here. ${canEmail ? "Invite emails go out automatically — use Email to send one again." : "Copy the link and send it to them."}</p>
     <div id="inv-out">${skeletonList(2)}</div></div>`;
   const reloadInv = async () => {
     const all = await repo.list("invites", { orderBy: [["createdAt", "desc"]], limit: 100 });
@@ -505,6 +522,7 @@ async function vInvites() {
         <span style="flex:1;min-width:0"><b class="ow">${esc(i.email || "")}</b><br>
         <span style="font-size:12px;color:var(--muted)">${esc(i.kind)} · ${esc(i.status)} · expires ${esc((i.expiresAt || "").slice(0, 16))}</span></span>
         <button class="btn btn-ghost btn-sm" data-copy="${esc(i.token)}">Copy link</button>
+        ${canEmail && i.kind === "invite" ? `<button class="btn btn-ghost btn-sm" data-email="${esc(i.token)}">Email</button>` : ""}
         ${i.kind === "reset" && i.status === "requested" ? `<button class="btn btn-primary btn-sm" data-sent="${esc(i.token)}">Mark sent</button>` : ""}
         <button class="icon-btn danger" data-revoke="${esc(i.token)}" aria-label="Revoke">✕</button>
       </div>`).join("")
@@ -512,6 +530,17 @@ async function vInvites() {
     qsa("[data-copy]", view).forEach((b) => (b.onclick = async () => {
       try { await navigator.clipboard.writeText(inviteLink(b.dataset.copy)); toast("Link copied", "success"); }
       catch { toast("Copy failed", "error"); }
+    }));
+    qsa("[data-email]", view).forEach((b) => (b.onclick = async () => {
+      const token = b.dataset.email;
+      const row = open.find((i) => i.token === token) || {};
+      b.disabled = true;
+      const prof = await repo.get("pendingProfiles", token).catch(() => null);
+      try {
+        await sendInviteEmail({ to: row.email || "", name: (prof && prof.name) || "", link: inviteLink(token) });
+        toast(`Invite emailed to ${row.email || "the employee"}`, "success");
+      } catch (e) { toast(e.message || "Email failed", "error"); }
+      b.disabled = false;
     }));
     qsa("[data-sent]", view).forEach((b) => (b.onclick = async () => {
       await repo.markInviteSent(b.dataset.sent);
