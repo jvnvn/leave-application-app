@@ -19,6 +19,14 @@ export const APP_CONFIG = {
     appId: "1:1022934149903:web:0643ff63366c2a6e496c7a",
     measurementId: "G-9Y24D78CS2",
   },
+  // Automatic invite emails via EmailJS (free tier, REST — no SDK). Setup in
+  // docs/FIRESTORE.md §10; with any ID empty, emails are off and HR keeps the
+  // copy-link flow.
+  email: {
+    publicKey: "", // emailjs.com → Account → General → Public Key (safe to expose)
+    serviceId: "", // Email Services → service ID (service_xxxx)
+    templateId: "", // Email Templates → template ID (template_xxxx)
+  },
   // ?emulator=1|0 connects/disconnects the Firestore/Auth adapters to local
   // emulators. Resolved (and persisted for the tab) below from the URL.
   emulator: {
