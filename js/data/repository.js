@@ -1,8 +1,9 @@
 /* Repository contract — the ONE data seam.
  *
  * UI code and services NEVER touch localStorage, IndexedDB, fetch, or
- * Firebase directly. Only js/data/* does. `repo` is the active adapter
- * chosen by APP_CONFIG.dataSource. Both adapters implement this interface:
+ * Firebase directly. Only js/data/* does. `repo` is the Firestore adapter
+ * (js/data/firestore-adapter.js), imported lazily so pages that never touch
+ * data load zero Firebase code. It implements this interface:
  *
  *   repo.get(collection, id) -> object | null
  *   repo.list(collection, { where: [[field, op, value]], orderBy: [[field, "asc"|"desc"]], limit, cursor })
@@ -67,19 +68,9 @@
  *   auditLogs: createdAt desc | entity+createdAt
  *   leaveBalanceTransactions: uid+leaveTypeCode+createdAt
  */
-import { APP_CONFIG } from "../config.js";
-import { localAdapter } from "./local-adapter.js";
 
-let active = localAdapter;
-let ready = Promise.resolve(localAdapter);
-
-if (APP_CONFIG.dataSource === "firestore") {
-  // Lazy: zero Firebase code loads in local mode.
-  ready = import("./firestore-adapter.js").then((m) => {
-    active = m.firestoreAdapter;
-    return active;
-  });
-}
+// Lazy: the Firebase SDK loads only when a page actually touches data.
+const ready = import("./firestore-adapter.js").then((m) => m.firestoreAdapter);
 
 export const repo = new Proxy(
   {},
@@ -90,7 +81,7 @@ export const repo = new Proxy(
   }
 );
 
-/** For tests: run the same contract suite against any adapter. */
+/** For tests: the active adapter once its module has loaded. */
 export async function resolveAdapter() {
   return ready;
 }

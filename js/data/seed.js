@@ -1,10 +1,8 @@
-/* Seed: reference data + demo accounts. Idempotent — safe to re-run.
- * Mirrors the old server.js seed() (14 leave types, PH 2026 holidays,
- * default settings) mapped onto the Firestore collection design.
- * NOTE: demo passwords are stored in PLAIN TEXT. DEMO ONLY — never do this
- * in production; Firebase Auth (firestore mode) hashes server-side. */
-export const DEMO_PASSWORD = "password123";
-
+/* Seed: reference data. Idempotent — safe to re-run. Mirrors the old
+ * server.js seed() (14 leave types, PH 2026 holidays, default settings)
+ * mapped onto the Firestore collection design. Reference data only — it
+ * NEVER creates users or passwords; Firebase Auth hashes passwords
+ * server-side. */
 export function seedBundle() {
   return {
     departments: [
@@ -53,19 +51,5 @@ export function seedBundle() {
       notifEnabled: true,
       signatories: { hrmo: "", supervisor: "", mayor: "" },
     },
-    users: [
-      { uid: "u-hr", email: "hr@example.com", name: "HR Administrator", role: "hr_admin", employeeNo: "HR-001", department: "Human Resources", position: "HR Manager", status: "active", dateHired: "2022-06-01", phone: "+639171234567", avatarColor: "#8B5CF6" },
-      { uid: "u-sup", email: "supervisor@example.com", name: "Sam Supervisor", role: "supervisor", employeeNo: "SUP-001", department: "Engineering", position: "Team Lead", status: "active", dateHired: "2022-06-01", phone: "+639171234567", avatarColor: "#F59E0B" },
-      { uid: "u-admin", email: "admin@example.com", name: "System Administrator", role: "sys_admin", employeeNo: "ADMIN-001", department: "Human Resources", position: "Administrator", status: "active", dateHired: "2022-01-01", phone: "", avatarColor: "#4F46E5" },
-    ],
   };
-}
-
-/** Demo balances: vacation 25, sick 15, special privilege 5 per account. */
-export function balanceSeedsFor(uid) {
-  return [
-    { uid, leaveTypeCode: "vacation", earned: 25, used: 0, pending: 0 },
-    { uid, leaveTypeCode: "sick", earned: 15, used: 0, pending: 0 },
-    { uid, leaveTypeCode: "spl", earned: 5, used: 0, pending: 0 },
-  ];
 }

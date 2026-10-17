@@ -1,7 +1,6 @@
 /* Employee app: Home, Requests, Request Leave wizard, Calendar,
  * Notifications, Profile. One render(state) per screen; wizard state object
  * + draft autosave so updates never wipe the form. */
-import { APP_CONFIG } from "../config.js";
 import { requireEmployee } from "../core/router.js";
 import { esc, qs, qsa, debounce, avatarColor } from "../core/dom.js";
 import { initials, daysLabel } from "../core/format.js";
@@ -19,7 +18,7 @@ import { getSettings } from "../services/settings.js";
 import { upload, getUrl, storagePath } from "../services/files.js";
 import { balanceCard, requestCard, skeletonList, emptyState, errorState, openSheet, openModal, closeOverlays, avatarHtml, timelineHtml, statusPill } from "../ui/components.js";
 import { initLayoutDebug } from "../ui/layout-debug.js";
-import { localAdapter } from "../data/local-adapter.js";
+import * as draftStore from "../data/draft.js";
 
 installGlobalHandlers();
 initLayoutDebug();
@@ -239,10 +238,10 @@ async function openDetail(id) {
 // ---------- WIZARD ----------
 function loadDraft() {
   const blank = { leaveTypeCode: "", details: {}, startDate: "", endDate: "", emergencyName: "", emergencyRelationship: "", emergencyPhone: "", reason: "", documents: [] };
-  return { ...blank, ...(localAdapter.loadDraft(user.uid) || {}) };
+  return { ...blank, ...(draftStore.loadDraft(user.uid) || {}) };
 }
 function saveDraft(s) {
-  localAdapter.saveDraft(user.uid, s);
+  draftStore.saveDraft(user.uid, s);
 }
 
 function renderWizard() {
@@ -299,7 +298,7 @@ function renderWizard() {
       <textarea class="field ow" id="reason" maxlength="${(settingsCache && settingsCache.charLimit) || 500}">${esc(state.reason)}</textarea>
       <p style="font-size:12px;color:var(--muted)">Min 8 characters • Written: ${(state.reason || "").length} letters</p></div>
     <div class="emp-sec"><p class="sec-label">5. Supporting documents ${lt && lt.requiresDoc ? "(required)" : ""}</p><div class="card" style="padding:16px">
-      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">PDF, JPG or PNG · max ${esc(APP_CONFIG.dataSource === "firestore" ? "700 KB" : `${(settingsCache && settingsCache.uploadMaxMb) || 5} MB`)} each</p>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 8px">PDF, JPG or PNG · max 700 KB each</p>
       <input type="file" id="doc-input" accept=".pdf,.jpg,.jpeg,.png" style="width:100%">
       <p id="doc-err" style="display:none;color:var(--danger);font-size:13px"></p>
       <p id="doc-busy" style="display:none;color:var(--indigo);font-size:13px">Uploading…</p>
@@ -368,7 +367,7 @@ function renderWizard() {
           emergencyRelationship: state.emergencyRelationship.trim(), emergencyPhone: state.emergencyPhone.trim(),
           details: state.details,
         }, docs.map((d) => ({ fileName: d.fileName, path: d.path, size: d.size, mimeType: d.mimeType, applicationId: "" })));
-        localAdapter.clearDraft(user.uid);
+        draftStore.clearDraft(user.uid);
         Object.assign(state, loadDraft());
         toast(`Application submitted (${daysLabel(days)})`, "success");
         filter = "pending";

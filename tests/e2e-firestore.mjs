@@ -1,12 +1,12 @@
 /* Firestore end-to-end verification (emulator). Drives the REAL app modules
  * in a headless browser through the full role flow and asserts every step.
  * Needs: emulators running, app served at APP_URL, playwright installed.
- *   $env:APP_URL="http://127.0.0.1:8000/index.html?emulator=1&backend=firestore"
+ *   $env:APP_URL="http://127.0.0.1:8000/index.html?emulator=1"
  *   node tests/e2e-firestore.mjs
  */
 import { chromium } from "playwright";
 
-const APP_URL = process.env.APP_URL || "http://127.0.0.1:8000/index.html?emulator=1&backend=firestore";
+const APP_URL = process.env.APP_URL || "http://127.0.0.1:8000/index.html?emulator=1";
 const results = [];
 const ok = (name, cond, extra = "") => {
   results.push([cond ? "PASS" : "FAIL", `${name}${extra ? " — " + extra : ""}`]);
@@ -18,7 +18,7 @@ const page = await browser.newPage();
 await page.goto(APP_URL);
 await page.waitForFunction(() => window.location.href.includes("login.html"), null, { timeout: 30000 });
 // Blank module playground on the same origin (fresh module state per reload).
-await page.goto("http://127.0.0.1:8000/tests/blank.html?emulator=1&backend=firestore");
+await page.goto("http://127.0.0.1:8000/tests/blank.html?emulator=1");
 
 const run = (fn, ...args) => page.evaluate(fn, ...args);
 
@@ -189,7 +189,7 @@ for (const [s, n] of results) if (s === "FAIL") console.log(s, n);
 
 // Persistence: reload, admin reads everything back.
 await page.reload();
-await page.goto("http://127.0.0.1:8000/tests/blank.html?emulator=1&backend=firestore");
+await page.goto("http://127.0.0.1:8000/tests/blank.html?emulator=1");
 const apps = await run(async () => {
   const { repo } = await import("/js/data/repository.js");
   const auth = await import("/js/services/auth.js");
@@ -198,10 +198,10 @@ const apps = await run(async () => {
 });
 ok("data survives reload", apps >= 3, `${apps} applications`);
 
-// Regression (2026-10): the backend-mode choice must survive in-app redirects
+// Regression (2026-10): the emulator choice must survive in-app redirects
 // that drop the query string — otherwise a bare page silently falls back to
-// the default backend and shows "Missing or insufficient permissions.".
-await page.goto("http://127.0.0.1:8000/tests/blank.html?emulator=1&backend=firestore");
+// the real project and shows "Missing or insufficient permissions.".
+await page.goto("http://127.0.0.1:8000/tests/blank.html?emulator=1");
 await run(async () => {
   const auth = await import("/js/services/auth.js");
   await auth.signOut();
@@ -210,25 +210,27 @@ await page.goto(APP_URL);
 await page.waitForFunction(() => window.location.href.includes("login.html"), null, { timeout: 30000 });
 const modeAfterRedirect = await run(async () => {
   const { APP_CONFIG } = await import("/js/config.js");
-  return { dataSource: APP_CONFIG.dataSource, useEmulator: APP_CONFIG.useEmulator };
+  return { useEmulator: APP_CONFIG.useEmulator };
 });
-ok("firestore+emulator mode survives redirect", modeAfterRedirect.dataSource === "firestore" && modeAfterRedirect.useEmulator === true, JSON.stringify(modeAfterRedirect));
+ok("emulator mode survives redirect", modeAfterRedirect.useEmulator === true, JSON.stringify(modeAfterRedirect));
 
+// Regression (2026-10): the retired ?backend=local demo switch must be inert —
+// the app is Firestore-only and never falls back to browser storage.
 await page.goto("http://127.0.0.1:8000/index.html?backend=local");
 await page.waitForFunction(() => window.location.href.includes("login.html"), null, { timeout: 30000 });
-const localAfterRedirect = await run(async () => {
+const legacyParam = await run(async () => {
   const { APP_CONFIG } = await import("/js/config.js");
-  return APP_CONFIG.dataSource;
+  const adapter = await (await import("/js/data/repository.js")).resolveAdapter();
+  return { dataSource: APP_CONFIG.dataSource, adapterKind: adapter.kind };
 });
-ok("local mode survives redirect", localAfterRedirect === "local", localAfterRedirect);
+ok("retired ?backend=local is inert", legacyParam.dataSource === undefined && legacyParam.adapterKind === "firestore", JSON.stringify(legacyParam));
 
-// Regression (2026-10): a stale cached session (local-demo login meeting a
-// firestore page, or signed out in another tab) must be cleared on page boot.
-await page.goto("http://127.0.0.1:8000/tests/blank.html?emulator=1&backend=firestore");
+// Regression (2026-10): a stale cached session (signed out in another tab, or
+// a leftover cache from the retired demo mode) must be cleared on page boot.
+await page.goto("http://127.0.0.1:8000/tests/blank.html?emulator=1");
 const stale = await run(async () => {
   const auth = await import("/js/services/auth.js");
-  const { localAdapter } = await import("/js/data/local-adapter.js");
-  const key = localAdapter.sessionKey();
+  const key = "lms.v1.session";
   localStorage.setItem(key, JSON.stringify({ uid: "ghost-uid", email: "ghost@example.com", name: "Ghost", role: "supervisor" }));
   const user = await auth.activeSession();
   return { user, raw: localStorage.getItem(key) };

@@ -1,10 +1,10 @@
 # Firestore setup — Leave Management System (Spark plan, no Cloud Functions)
 
-The app is frontend-only. `js/config.js` → `APP_CONFIG.dataSource` picks
-`"local"` (browser storage) or `"firestore"` (this guide). The UI is
-identical; only `js/data/*`, `js/services/auth.js` and `js/services/files.js`
-talk to Firebase, through the `repo` contract
-(`js/data/repository.js` header).
+The app is frontend-only and **Firestore-only** — the in-browser demo backend
+was removed. The UI talks to Firebase only through the `repo` contract
+(`js/data/repository.js` header) implemented by `js/data/firestore-adapter.js`;
+`js/services/auth.js` and `js/services/files.js` are the other Firebase touch
+points.
 
 > There is no backend. **The security rules (`firestore.rules`) are the real
 > security layer.** They were verified against the Firestore emulator
@@ -58,16 +58,15 @@ node tests/bootstrap-emulator.mjs   # needs firebase-admin + playwright installe
 Then run the full end-to-end (headless Chromium drives the REAL app code):
 
 ```powershell
-$env:APP_URL='http://127.0.0.1:8000/index.html?emulator=1&backend=firestore'
+$env:APP_URL='http://127.0.0.1:8000/index.html?emulator=1'
 node tests/e2e-firestore.mjs
 ```
 
-Tip: open any page with `?backend=firestore` (or `?backend=local`) to switch
-backends without editing `js/config.js`. Add `&emulator=1` for the emulators
+Tip: open any page with `&emulator=1` to connect to the local emulators
 (`?emulator=0` disconnects again). The choice is remembered per browser tab
 (`sessionStorage`), so it survives in-app redirects that drop the query
-string — a bare page after login no longer silently falls back to the wrong
-backend.
+string — a bare page after login no longer silently falls back to the real
+project.
 
 ## 4. How identity works (no Functions, Spark-safe)
 
@@ -83,17 +82,17 @@ backend.
 - Forgot password: Auth's `sendPasswordResetEmail` + an HR-visible request
   (Invites & Resets section). HR "set password" sends a reset email —
   nothing secret is ever written to Firestore (`password` fields don't exist
-  there; the local adapter's plain-text passwords never leave the browser).
-- Page boot re-validates a cached session against live Auth in firestore mode
-  (`auth.activeSession()`): cleared when signed out elsewhere, deleted, or a
-  local-demo cache meets a firestore page. On SDK/network failure the cached
-  session is kept so offline use still works.
+  there).
+- Page boot re-validates a cached session against live Auth
+  (`auth.activeSession()`): cleared when signed out elsewhere, the account was
+  deleted, or a cache from the retired demo mode is found. On SDK/network
+  failure the cached session is kept so offline use still works.
 
 ## 5. Uploads (Spark: base64 in Firestore, ≤700 KB)
 
 No Storage dependency: files ride as base64 data URLs in `fileBlobs/{id}`
 (Firestore's 1 MiB doc cap ⇒ ~700 KB raw cap after base64 inflation).
-The wizard shows "max 700 KB" in firestore mode and rejects bigger files
+The wizard shows "max 700 KB" and rejects bigger files
 with a clear message. To raise the cap later, switch `js/services/files.js`
 to Firebase Storage (the path layout `leave-documents/{uid}/{app}/{file}`
 is already reserved) — Blaze plan required.
@@ -154,12 +153,9 @@ write denied**, admin control write works → reject-without-comment refused
 hold → reset flow → deletion request → self-confirm refused → second
 supervisor confirms → account + balances gone → **employee cannot read
 another's application / touch earned / list users** → audit log contains
-all five lifecycle actions → **data survives page reload** → **backend-mode
-choice survives redirects** (firestore+emulator and local) → **stale cached
-session cleared on firestore boot**.
-
-Local mode regression: seed → submit → approve verified in Node
-(`types: 14, used: 2, pending: 0`).
+all five lifecycle actions → **data survives page reload** → **emulator
+choice survives redirects** → **retired ?backend=local is inert** → **stale
+cached session cleared on firestore boot**.
 
 ## 10. Still manual (not automated)
 
