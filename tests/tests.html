@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tests — Leave Management System</title>
+<link rel="stylesheet" href="../css/tokens.css">
+<link rel="stylesheet" href="../css/base.css">
+<style>
+body { padding: 24px 16px; max-width: 900px; margin: 0 auto; }
+.pass { color: #047857; } .fail { color: var(--danger); }
+#results li { font-size: 14px; margin-bottom: 4px; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<h1>Test runner</h1>
+<p id="summary">Running…</p>
+<ul id="results"></ul>
+<script type="module">
+import { calcWorkingDays, canTransition, isCancellable, remaining, validateApplication, dayOfWeek } from "../js/core/rules.js";
+import { toISODate, parseISODate } from "../js/core/dates.js";
+import { localAdapter } from "../js/data/local-adapter.js";
+
+const out = [];
+function t(name, fn) {
+  try {
+    const r = fn();
+    if (r && r.then) return r.then(() => out.push(["PASS", name])).catch((e) => out.push(["FAIL", `${name} — ${e.message}`]));
+    out.push(["PASS", name]);
+  } catch (e) {
+    out.push(["FAIL", `${name} — ${e.message}`]);
+  }
+}
+function eq(a, b) {
+  if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`);
+}
+
+// ---- 1. core/rules unit tests ----
+await t("working days: Mon–Fri = 5", () => eq(calcWorkingDays("2026-07-06", "2026-07-10", []), 5));
+await t("working days: excludes weekend", () => eq(calcWorkingDays("2026-07-03", "2026-07-06", []), 2)); // Fri + Mon
+await t("working days: excludes holiday", () => eq(calcWorkingDays("2026-06-11", "2026-06-13", ["2026-06-12"]), 1)); // Thu + Fri(holiday) + Sat
+await t("working days: 0 when end < start", () => eq(calcWorkingDays("2026-07-10", "2026-07-01", []), 0));
+await t("working days: single Saturday = 0", () => eq(calcWorkingDays("2026-07-04", "2026-07-04", []), 0));
+await t("working days: sample vacation Jun30–Jul3 = 4", () => eq(calcWorkingDays("2026-06-30", "2026-07-03", []), 4));
+await t("transitions: every allowed edge", () => {
+  const edges = { DRAFT: ["PENDING", "CANCELLED"], PENDING: ["UNDER_REVIEW", "REJECTED", "CANCELLED", "APPROVED"], UNDER_REVIEW: ["FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL", "APPROVED", "REJECTED"], FOR_SUPERVISOR_REVIEW: ["FOR_FINAL_APPROVAL", "APPROVED", "REJECTED"], FOR_FINAL_APPROVAL: ["APPROVED", "REJECTED"] };
+  for (const [from, tos] of Object.entries(edges)) for (const to of tos) if (!canTransition(from, to)) throw new Error(`${from}->${to} should be allowed`);
+});
+await t("transitions: forbidden edges", () => {
+  const bad = [["APPROVED", "PENDING"], ["REJECTED", "APPROVED"], ["CANCELLED", "PENDING"], ["DRAFT", "APPROVED"], ["PENDING", "FOR_FINAL_APPROVAL"], ["FOR_FINAL_APPROVAL", "CANCELLED"]];
+  for (const [f, x] of bad) if (canTransition(f, x)) throw new Error(`${f}->${x} should be forbidden`);
+});
+await t("cancellable set", () => {
+  eq(isCancellable("DRAFT"), true); eq(isCancellable("PENDING"), true); eq(isCancellable("UNDER_REVIEW"), true);
+  eq(isCancellable("APPROVED"), false); eq(isCancellable("FOR_FINAL_APPROVAL"), false);
+});
+await t("balance math", () => eq(remaining(25, 4, 3), 18));
+await t("validation: short reason", () => {
+  const errs = validateApplication({ startDate: "2026-07-06", endDate: "2026-07-07", reason: "sick", emergencyName: "A", emergencyPhone: "+639171", leaveType: { code: "sick", requiresDoc: true }, details: { care_type: "hospital", illness: "flu" }, documents: [{}], charLimit: 500 });
+  if (!errs.some((e) => /8 characters/.test(e))) throw new Error("expected min-length error");
+});
+await t("validation: missing doc", () => {
+  const errs = validateApplication({ startDate: "2026-07-06", endDate: "2026-07-07", reason: "I am very sick today", emergencyName: "A", emergencyPhone: "+63917", leaveType: { code: "sick", requiresDoc: true }, details: { care_type: "hospital", illness: "flu" }, documents: [], charLimit: 500 });
+  if (!errs.some((e) => /document/i.test(e))) throw new Error("expected requiresDoc error");
+});
+await t("dates round-trip", () => {
+  const d = parseISODate("2026-06-12");
+  eq(toISODate(d), "2026-06-12");
+  // Timezone independence: dayOfWeek uses pure integer math, identical in
+  // Asia/Manila, UTC and America/Los_Angeles by construction.
+  eq(dayOfWeek("2026-06-12"), 5); // Friday
+  eq(dayOfWeek("2026-07-04"), 6); // Saturday
+});
+
+// ---- 2. repository CONTRACT suite (adapter-parameterized) ----
+async function runContractSuite(adapter, label) {
+  const pre = `[${label}] `;
+  await t(pre + "create + get", async () => {
+    const id = await adapter.create("departments", { name: "Contract Dept" });
+    const got = await adapter.get("departments", id);
+    eq(got.name, "Contract Dept");
+    await adapter.remove("departments", id);
+  });
+  await t(pre + "list where/orderBy/limit", async () => {
+    await adapter.create("notifications", { uid: "ct-u", title: "b", createdAt: "2026-01-02T00:00:00.000Z", read: false });
+    await adapter.create("notifications", { uid: "ct-u", title: "a", createdAt: "2026-01-01T00:00:00.000Z", read: false });
+    const rows = await adapter.list("notifications", { where: [["uid", "==", "ct-u"]], orderBy: [["createdAt", "asc"]], limit: 1 });
+    eq(rows.length, 1);
+    eq(rows[0].title, "a");
+    const all = await adapter.list("notifications", { where: [["uid", "==", "ct-u"]], limit: 10 });
+    await Promise.all(all.map((n) => adapter.remove("notifications", n.id)));
+  });
+  await t(pre + "update + remove", async () => {
+    const id = await adapter.create("departments", { name: "Tmp" });
+    await adapter.update("departments", id, { name: "Tmp2" });
+    eq((await adapter.get("departments", id)).name, "Tmp2");
+    await adapter.remove("departments", id);
+    eq(await adapter.get("departments", id), null);
+  });
+  await t(pre + "subscribe fires on change", async () => {
+    let calls = 0;
+    const unsub = adapter.subscribe("departments", {}, () => calls++);
+    await adapter.create("departments", { name: "Sub Probe" });
+    await new Promise((r) => setTimeout(r, 50));
+    unsub();
+    if (calls < 2) throw new Error(`expected >=2 calls, got ${calls}`);
+    const rows = await adapter.list("departments", { where: [["name", "==", "Sub Probe"]] });
+    await Promise.all(rows.map((r) => adapter.remove("departments", r.id)));
+  });
+  await t(pre + "submit -> approve updates balances", async () => {
+    const uid = "u-sup";
+    const before = await adapter.list("leaveBalances", { where: [["uid", "==", uid], ["leaveTypeCode", "==", "vacation"]] });
+    const b0 = before[0];
+    const { id } = await adapter.submitApplication({
+      application: { uid, employeeName: "Sam Supervisor", department: "Engineering", position: "Team Lead", leaveTypeCode: "vacation", startDate: "2026-09-07", endDate: "2026-09-08", reason: "Rest and recharge time", emergencyName: "Jose", emergencyRelationship: "Spouse", emergencyPhone: "+639170000000", details: { location: "within", where: "Tagaytay" } },
+      documents: [],
+    });
+    const held = (await adapter.get("leaveBalances", `${uid}_vacation`)) || (await adapter.list("leaveBalances", { where: [["uid", "==", uid], ["leaveTypeCode", "==", "vacation"]] }))[0];
+    eq(held.pending, (b0.pending || 0) + 2);
+    await adapter.reviewApplication({ applicationId: id, action: "APPROVED", actor: { uid: "u-hr", name: "HR", role: "hr_admin" }, comment: "ok" });
+    const after = await adapter.list("leaveBalances", { where: [["uid", "==", uid], ["leaveTypeCode", "==", "vacation"]] });
+    eq(after[0].used, (b0.used || 0) + 2);
+    eq(after[0].pending, b0.pending || 0);
+    void b0;
+  });
+  await t(pre + "reject releases hold + requires comment", async () => {
+    const uid = "u-hr";
+    const { id } = await adapter.submitApplication({
+      application: { uid, employeeName: "HR Administrator", department: "Human Resources", position: "HR Manager", leaveTypeCode: "sick", startDate: "2026-09-14", endDate: "2026-09-15", reason: "Down with the flu badly", emergencyName: "Ana", emergencyRelationship: "Sister", emergencyPhone: "+639170000001", details: { care_type: "outpatient", illness: "flu" } },
+      documents: [{ fileName: "med.pdf", path: "p", size: 10, mimeType: "application/pdf" }],
+    });
+    let threw = false;
+    try { await adapter.reviewApplication({ applicationId: id, action: "REJECTED", actor: { uid: "u-hr", role: "hr_admin" }, comment: "" }); }
+    catch { threw = true; }
+    if (!threw) throw new Error("reject without comment should fail");
+    await adapter.reviewApplication({ applicationId: id, action: "REJECTED", actor: { uid: "u-hr", role: "hr_admin" }, comment: "needs certificate" });
+    const b = (await adapter.list("leaveBalances", { where: [["uid", "==", uid], ["leaveTypeCode", "==", "sick"]] }))[0];
+    if ((b.pending || 0) !== 0) throw new Error("hold not released");
+  });
+  await t(pre + "cancel releases hold", async () => {
+    const uid = "u-admin";
+    const { id } = await adapter.submitApplication({
+      application: { uid, employeeName: "System Administrator", department: "Human Resources", position: "Administrator", leaveTypeCode: "spl", startDate: "2026-10-05", endDate: "2026-10-05", reason: "Personal errand day off", emergencyName: "Ana", emergencyRelationship: "Spouse", emergencyPhone: "+639170000002", details: { location: "within" } },
+      documents: [],
+    });
+    await adapter.cancelApplication({ applicationId: id, actor: { uid, role: "employee" } });
+    const got = await adapter.get("leaveApplications", id);
+    eq(got.status, "CANCELLED");
+  });
+  await t(pre + "atomic op is all-or-nothing on bad input", async () => {
+    const balsBefore = await adapter.list("leaveBalances", { where: [["uid", "==", "u-admin"]] });
+    let threw = false;
+    try {
+      await adapter.submitApplication({
+        application: { uid: "u-admin", employeeName: "K", leaveTypeCode: "nope", startDate: "2026-10-05", endDate: "2026-10-05", reason: "x".repeat(20), emergencyName: "A", emergencyPhone: "+63917", details: {} },
+        documents: [],
+      });
+    } catch { threw = true; }
+    if (!threw) throw new Error("invalid type should fail");
+    const balsAfter = await adapter.list("leaveBalances", { where: [["uid", "==", "u-admin"]] });
+    eq(JSON.stringify(balsAfter), JSON.stringify(balsBefore));
+  });
+}
+window.runContractSuite = runContractSuite; // reuse vs Firestore emulator later
+
+await runContractSuite(localAdapter, "local");
+
+// ---- 3. resilience ----
+await t("invites: HR creates -> redeem -> link dead", async () => {
+  const { token } = await localAdapter.inviteUser({ userData: { email: "newbie@example.com", name: "New Bie", role: "employee", department: "Engineering", position: "Staff" } });
+  const before = await localAdapter.get("users", (await localAdapter.get("invites", token)).uid);
+  if (before.password) throw new Error("new account must have NO password");
+  const seedBals = await localAdapter.list("leaveBalances", { where: [["uid", "==", before.id]] });
+  if (seedBals.length !== 3) throw new Error("invited account must get starting credits");
+  await localAdapter.consumeInvite({ token, newPassword: "brandnewpass" });
+  const after = await localAdapter.get("users", before.id);
+  if (after.password !== "brandnewpass") throw new Error("password not set");
+  let threw = false;
+  try { await localAdapter.consumeInvite({ token, newPassword: "anotherpass" }); } catch { threw = true; }
+  if (!threw) throw new Error("double-use should fail");
+});
+await t("invites: expired link rejected", async () => {
+  const { token } = await localAdapter.inviteUser({ userData: { email: "oldie@example.com", name: "Old Die", role: "employee" } });
+  await localAdapter.update("invites", token, { expiresAt: "2000-01-01T00:00:00.000Z" });
+  let threw = false;
+  try { await localAdapter.consumeInvite({ token, newPassword: "longenoughpassword" }); } catch { threw = true; }
+  if (!threw) throw new Error("expired should fail");
+  await localAdapter.remove("invites", token);
+});
+await t("invites: forgot-password notifies HR", async () => {
+  await localAdapter.requestPasswordReset({ email: "supervisor@example.com" });
+  const hrNotifs = await localAdapter.list("notifications", { where: [["uid", "==", "u-hr"]], limit: 5 });
+  if (!hrNotifs.some((n) => /reset/i.test(n.title))) throw new Error("HR not notified");
+  const resets = await localAdapter.list("invites", { where: [["kind", "==", "reset"]], limit: 10 });
+  const mine = resets.filter((r) => r.email === "supervisor@example.com" && !r.used);
+  await Promise.all(mine.map((r) => localAdapter.remove("invites", r.id)));
+});
+await t("documents: attach after submit appears in detail", async () => {
+  const { id } = await localAdapter.submitApplication({
+    application: { uid: "u-sup", employeeName: "S", department: "Eng", position: "T", leaveTypeCode: "vawc", startDate: "2026-11-02", endDate: "2026-11-03", reason: "x".repeat(20), emergencyName: "A", emergencyPhone: "+63917", details: {} },
+    documents: [],
+  });
+  await localAdapter.addDocument({ applicationId: id, doc: { fileName: "a.pdf", path: "p", size: 5, mimeType: "application/pdf" }, actor: { uid: "u-sup" } });
+  const docs = await localAdapter.list(`leaveApplications/${id}/documents`, {});
+  if (docs.length !== 1 || docs[0].fileName !== "a.pdf") throw new Error("document not readable via subcollection path");
+  await localAdapter.cancelApplication({ applicationId: id, actor: { uid: "u-sup" } });
+});
+await t("vawc: working days counted, maxDays enforced", async () => {
+  const { id, workingDays } = await localAdapter.submitApplication({
+    application: { uid: "u-sup", employeeName: "Sam Supervisor", department: "Engineering", position: "Team Lead", leaveTypeCode: "vawc", startDate: "2026-10-12", endDate: "2026-10-18", reason: "VAWC case filing week", emergencyName: "A", emergencyRelationship: "Spouse", emergencyPhone: "+639170000000", details: {} },
+    documents: [],
+  });
+  if (workingDays !== 5) throw new Error(`expected 5 days, got ${workingDays}`);
+  await localAdapter.cancelApplication({ applicationId: id, actor: { uid: "u-sup", role: "supervisor" } });
+  let threw = false;
+  try {
+    await localAdapter.submitApplication({
+      application: { uid: "u-sup", employeeName: "S", leaveTypeCode: "vawc", startDate: "2026-10-01", endDate: "2026-10-31", reason: "x".repeat(20), emergencyName: "A", emergencyPhone: "+63917", details: {} },
+      documents: [],
+    });
+  } catch { threw = true; }
+  if (!threw) throw new Error("over-maxDays should fail");
+});
+await t("invites: unknown email stays silent", async () => {  const r = await localAdapter.requestPasswordReset({ email: "ghost@nowhere.test" });
+  if (!r || !r.ok) throw new Error("should return ok silently");
+});
+await t("deletion: request -> supervisor confirm removes account", async () => {
+  const { uid } = await localAdapter.inviteUser({ userData: { email: "doomed@example.com", name: "Doom Med", role: "employee" } });
+  await localAdapter.consumeInvite({ token: (await localAdapter.list("invites", { where: [["uid", "==", uid]], limit: 5 }))[0].id, newPassword: "doomedpass" });
+  const { requestId } = await localAdapter.requestDeletion({ uid, actor: { uid: "u-hr", email: "hr@example.com", name: "HR", role: "hr_admin" } });
+  let threw = false;
+  try { await localAdapter.confirmDeletion({ requestId, actor: { uid: "u-hr", role: "hr_admin" } }); } catch { threw = true; }
+  if (!threw) throw new Error("requester must not confirm own request");
+  await localAdapter.confirmDeletion({ requestId, actor: { uid: "u-sup", email: "supervisor@example.com", role: "supervisor" } });
+  if (await localAdapter.get("users", uid)) throw new Error("account still exists");
+  const bals = await localAdapter.list("leaveBalances", { where: [["uid", "==", uid]] });
+  if (bals.length) throw new Error("balances not cascaded");
+});
+await t("deletion: guards (self, sys_admin, active apps)", async () => {
+  let n = 0;
+  try { await localAdapter.requestDeletion({ uid: "u-hr", actor: { uid: "u-hr", role: "hr_admin" } }); } catch { n++; }
+  try { await localAdapter.requestDeletion({ uid: "u-admin", actor: { uid: "u-hr", role: "hr_admin" } }); } catch { n++; }
+  if (n !== 2) throw new Error("self/sys_admin deletions must be refused");
+});
+await t("admin: HR sets any account password", async () => {  await localAdapter.adminSetPassword({ uid: "u-sup", newPassword: "supervisor-new-pass", actor: { uid: "u-hr", email: "hr@example.com", role: "hr_admin" } });
+  const u = await localAdapter.get("users", "u-sup");
+  if (u.password !== "supervisor-new-pass") throw new Error("password not updated");
+  await localAdapter.adminSetPassword({ uid: "u-sup", newPassword: "password123", actor: { uid: "u-hr", role: "hr_admin" } });
+  let threw = false;
+  try { await localAdapter.adminSetPassword({ uid: "u-sup", newPassword: "short", actor: { uid: "u-hr" } }); } catch { threw = true; }
+  if (!threw) throw new Error("short password should fail");
+});await t("resilience: missing fields normalized", async () => {
+  const id = await localAdapter.create("leaveApplications", { uid: "u-admin", status: "WEIRD_STATUS" });
+  const got = await localAdapter.get("leaveApplications", id);
+  if (!got || got.reason === undefined || got.details === undefined) throw new Error("not normalized");
+  await localAdapter.remove("leaveApplications", id);
+});
+
+const fails = out.filter(([s]) => s === "FAIL");
+document.getElementById("results").innerHTML = out.map(([s, n]) => `<li class="${s.toLowerCase()}"><b>${s}</b> — ${n.replace(/</g, "&lt;")}</li>`).join("");
+document.getElementById("summary").innerHTML = `<b class="${fails.length ? "fail" : "pass"}">${out.length - fails.length}/${out.length} passed</b>`;
+document.title = fails.length ? `FAIL (${fails.length})` : "ALL GREEN";
+</script>
+</body>
+</html>

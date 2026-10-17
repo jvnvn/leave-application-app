@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Leave Management System</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+</head>
+<body>
+<div class="state-box" role="status"><div class="skeleton" style="height:24px;max-width:280px;margin:40px auto 12px"></div><p>Loading…</p></div>
+<script type="module">
+import { activeSession } from "./js/services/auth.js";
+import { homeFor } from "./js/core/router.js";
+try {
+  const u = await activeSession();
+  location.replace(u ? homeFor(u) : "login.html");
+} catch (e) {
+  console.error(e);
+  location.replace("login.html");
+}
+</script>
+</body>
+</html>

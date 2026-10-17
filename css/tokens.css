@@ -1,0 +1,50 @@
+/* Design tokens — the ONLY place for colors, spacing, radii, shadows,
+ * font sizes and the z-index scale. No hard-coded colors elsewhere. */
+:root {
+  --navy: #0f172a;
+  --navy-2: #1e2a5a;
+  --page: #f3f7f9;
+  --card: #ffffff;
+  --ink: #0f172a;
+  --ink-2: #334155;
+  --muted: #7b8ba3;
+  --line: #e6ecf2;
+  --indigo: #4f46e5;
+  --indigo-dark: #4338ca;
+  --indigo-tint: #eef0ff;
+  --indigo-disabled: #b9bfe3;
+  --sick: #f43f5e;
+  --sick-tint: #ffeef1;
+  --orange: #f59e0b;
+  --orange-tint: #fef3e2;
+  --green: #10b981;
+  --green-tint: #e6f9f1;
+  --pending-bg: #fef3c7;
+  --pending-text: #b45309;
+  --slate-pill: #eef2f7;
+  --danger: #dc2626;
+  --radius-card: 24px;
+  --radius-input: 20px;
+  --radius-pill: 999px;
+  --shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.08);
+  --shadow-lift: 0 12px 32px rgba(79, 70, 229, 0.28);
+  --font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 24px;
+  --fs-2xl: 32px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --z-nav: 40;
+  --z-fab: 45;
+  --z-sheet: 60;
+  --z-modal: 70;
+  --z-toast: 90;
+  --z-debug: 120;
+}

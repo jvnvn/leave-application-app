@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Application for Leave — Print</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/print.css">
+</head>
+<body>
+<div class="no-print">
+  <button class="btn btn-primary" id="print-btn">Print / Save as PDF</button>
+  <a class="btn btn-ghost" href="employee.html">Back</a>
+  <p id="print-error" style="color:var(--danger)"></p>
+</div>
+<div class="print-page" id="form"></div>
+<script type="module" src="js/pages/print.js"></script>
+</body>
+</html>

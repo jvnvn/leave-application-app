@@ -1,8 +1,183 @@
 rules_version = '2';
+// Production rules. UI hiding is NOT security: these enforce the
+// PERMISSIONS map in js/core/constants.js.
+// Deploy: firebase deploy --only firestore:rules.
+//
+// users/{uid} === Firebase Auth uid. No passwords are ever stored here —
+// signup and password changes happen through Firebase Auth itself.
+//
+// Role checks call myRole() at most ONCE per rule (nested through a single
+// predicate) and list rules pair any resource.data test with a query that
+// filters by that same field.
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+    function signedIn() { return request.auth != null; }
+    function myUid() { return request.auth.uid; }
+    function myEmail() { return request.auth.token.email; }
+    function myRole() {
+      return signedIn() && exists(/databases/(default)/documents/users/$(myUid()))
+        ? get(/databases/(default)/documents/users/$(myUid())).data.role : null;
+    }
+    function isHr(role) { return role == 'hr_staff' || role == 'hr_admin' || role == 'sys_admin'; }
+    function isReviewer(role) { return isHr(role) || role == 'supervisor' || role == 'final_approver'; }
+    function isAdmin() { return myRole() == 'hr_admin' || myRole() == 'sys_admin'; }
+    // Owners and approvers may move pending/used; only HR may touch earned.
+    function editBalance(role, mine) {
+      return isHr(role)
+        || ((isReviewer(role) || mine) && request.resource.data.earned == resource.data.earned);
+    }
+    function editUsers(role) {
+      return ((role == 'hr_admin' || role == 'sys_admin')
+          && !(request.resource.data.diff(resource.data).affectedKeys().hasAny(['email'])))
+        || ((role == 'hr_staff' || role == 'supervisor')
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'department', 'position', 'phone', 'status', 'supervisorUid', 'dateHired', 'avatarColor', 'updatedAt']));
+    }
+    function owner() { return resource.data.uid == myUid(); }
+
+    function validTransition(from, to) {
+      return (from == 'DRAFT' && to in ['PENDING', 'CANCELLED'])
+        || (from == 'PENDING' && to in ['UNDER_REVIEW', 'REJECTED', 'CANCELLED', 'APPROVED'])
+        || (from == 'UNDER_REVIEW' && to in ['FOR_SUPERVISOR_REVIEW', 'FOR_FINAL_APPROVAL', 'APPROVED', 'REJECTED'])
+        || (from == 'FOR_SUPERVISOR_REVIEW' && to in ['FOR_FINAL_APPROVAL', 'APPROVED', 'REJECTED'])
+        || (from == 'FOR_FINAL_APPROVAL' && to in ['APPROVED', 'REJECTED']);
+    }
+
+    // Self-signup only with a valid invite: the token (HR-issued secret)
+    // authorizes the role. (First sys_admin is manual — see FIRESTORE.md.)
+    function validInvite(tok, em) {
+      return tok != null && tok != ''
+        && exists(/databases/$(database)/documents/pendingProfiles/$(tok))
+        && get(/databases/$(database)/documents/pendingProfiles/$(tok)).data.email == em;
+    }
+    match /users/{uid} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/users/$(uid)) || uid == myUid() || isReviewer(myRole()));
+      allow list: if signedIn() && isReviewer(myRole());
+      allow create: if signedIn() && uid == myUid()
+        && request.resource.data.email == myEmail()
+        && request.resource.data.role != null
+        && request.resource.data.role in ['employee', 'supervisor', 'hr_staff', 'hr_admin']
+        && validInvite(request.resource.data.inviteToken, myEmail());
+      allow update: if signedIn() && editUsers(myRole());
+      allow delete: if signedIn() && isReviewer(myRole());
+    }
+
+    match /leaveTypes/{code} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isAdmin();
+    }
+    match /holidays/{date} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isAdmin();
+    }
+    match /departments/{id} {
+      allow read: if signedIn();
+      allow write: if signedIn() && isAdmin();
+    }
+    match /settings/app {
+      allow read: if signedIn();
+      allow write: if signedIn() && isAdmin();
+    }
+
+    match /leaveApplications/{appId} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/leaveApplications/$(appId)) || owner() || isReviewer(myRole()));
+      allow list: if signedIn() && (isReviewer(myRole()) || resource.data.uid == myUid());
+      allow create: if signedIn() && request.resource.data.uid == myUid()
+        && request.resource.data.status == 'PENDING';
+      allow update: if signedIn() && isReviewer(myRole())
+        && validTransition(resource.data.status, request.resource.data.status)
+        && request.resource.data.uid == resource.data.uid;
+      allow delete: if false;
+
+      match /approvals/{id} {
+        allow read: if signedIn();
+        allow create: if signedIn() && (isReviewer(myRole()) || request.resource.data.approverUid == myUid());
+        allow update, delete: if false;
+      }
+      match /documents/{id} {
+        allow read: if signedIn();
+        allow create: if signedIn();
+        allow delete: if signedIn() && isReviewer(myRole());
+      }
+    }
+
+    // earned credits are HR/approver-only; owners may move their own
+    // pending/used (holds and releases on their own applications).
+    match /leaveBalances/{id} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/leaveBalances/$(id)) || owner() || isHr(myRole()));
+      allow list: if signedIn() && (isHr(myRole()) || resource.data.uid == myUid());
+      allow create: if signedIn() && (isReviewer(myRole())
+        || (request.resource.data.uid == myUid() && request.resource.data.used == 0 && request.resource.data.pending == 0
+          && (request.resource.data.earned == 0
+            || (request.resource.data.leaveTypeCode == 'vacation' && request.resource.data.earned == 25)
+            || (request.resource.data.leaveTypeCode == 'sick' && request.resource.data.earned == 15)
+            || (request.resource.data.leaveTypeCode == 'spl' && request.resource.data.earned == 5))));
+      allow update: if signedIn() && editBalance(myRole(), resource.data.uid == myUid());
+      allow delete: if signedIn() && (isHr(myRole()) || isReviewer(myRole()));
+    }
+    match /leaveBalanceTransactions/{id} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/leaveBalanceTransactions/$(id)) || owner() || isHr(myRole()));
+      allow list: if signedIn() && (isReviewer(myRole()) || resource.data.uid == myUid());
+      allow create: if signedIn() && isReviewer(myRole());
+      allow update, delete: if false;
+    }
+
+    // uid-targeted notices plus role broadcasts (uid == "" + forRoles)
+    // written by system actions such as new applications.
+    match /notifications/{id} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/notifications/$(id)) || owner() || isReviewer(myRole()));
+      allow list: if signedIn() && (isReviewer(myRole()) || resource.data.uid == myUid());
+      allow create: if signedIn();
+      allow update: if signedIn() && (resource.data.uid == myUid() || isHr(myRole()));
+      allow delete: if false;
+    }
+
+    match /auditLogs/{id} {
+      allow get, list: if signedIn() && isAdmin();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    // Invite links: get-only for the link holder (tokens are unguessable).
+    // Redemption marks used only by the matching email.
+    match /invites/{token} {
+      allow get: if true;
+      allow list: if signedIn() && (isHr(myRole()) || isReviewer(myRole()));
+      allow create: if signedIn() && isHr(myRole());
+      allow update: if signedIn() && (isHr(myRole())
+        || (myEmail() == resource.data.email
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used', 'status'])));
+      allow delete: if signedIn() && (isHr(myRole()) || isReviewer(myRole()));
+    }
+
+    // Waiting profiles: same get-only pattern as invites.
+    match /pendingProfiles/{token} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn() && isHr(myRole());
+      allow update: if signedIn() && isHr(myRole());
+      allow delete: if signedIn() && (isHr(myRole()) || myEmail() == resource.data.email);
+    }
+
+    match /fileBlobs/{id} {
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/fileBlobs/$(id)) || owner() || isReviewer(myRole()));
+      allow list: if signedIn() && (isReviewer(myRole()) || resource.data.uid == myUid());
+      allow create: if signedIn() && request.resource.data.uid == myUid();
+      allow update: if false;
+      allow delete: if signedIn() && (resource.data.uid == myUid() || isHr(myRole()));
+    }
+
+    match /adminPasswordResets/{id} {
+      allow read: if signedIn() && isHr(myRole());
+      allow create: if signedIn() && isHr(myRole());
+      allow update, delete: if false;
+    }
+
+    match /deletionRequests/{id} {
+      allow read: if signedIn() && isReviewer(myRole());
+      allow create: if signedIn() && isHr(myRole());
+      allow update: if signedIn() && isReviewer(myRole());
+      allow delete: if signedIn() && isReviewer(myRole());
     }
   }
 }

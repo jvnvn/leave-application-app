@@ -1,0 +1,22 @@
+/* print.css — official APPLICATION FOR LEAVE (Revised 2020), A4 one page. */
+@page { size: A4; margin: 12mm; }
+.print-page { max-width: 210mm; margin: 0 auto; background: #fff; color: #000; font-size: 11px; line-height: 1.35; }
+.pf-head { text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+.pf-head p { margin: 0; }
+.pf-row { display: flex; gap: 8px; }
+.pf-box { border: 1px solid #000; min-height: 44px; padding: 4px 6px; margin-bottom: 6px; break-inside: avoid; }
+.pf-item { margin-bottom: 4px; break-inside: avoid; }
+.pf-sect { border: 1px solid #000; padding: 6px 8px; margin-bottom: 6px; break-inside: avoid; }
+.pf-sect h4 { margin: 0 0 4px; font-size: 11px; }
+.check { display: inline-block; width: 11px; height: 11px; border: 1px solid #000; margin-right: 4px; vertical-align: -1px; text-align: center; line-height: 10px; font-size: 10px; }
+.sig-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px; }
+.sig-line { border-top: 1px solid #000; margin-top: 28px; padding-top: 2px; text-align: center; font-size: 10px; }
+.no-print { text-align: center; padding: 16px; }
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .print-page { max-width: none; }
+}
+@media screen {
+  .print-page { padding: 16px; border: 1px solid var(--line); margin-top: 16px; margin-bottom: 16px; }
+}

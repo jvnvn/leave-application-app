@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HR Console — Leave Management System</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+<div class="admin-shell">
+  <aside class="sidebar" id="sidebar" aria-label="Sections"><h2>HR Console</h2><nav id="side-nav"></nav></aside>
+  <main class="admin-main">
+    <div class="topbar">
+      <button class="btn btn-ghost btn-sm menu-btn" id="menu-btn" aria-label="Menu">☰</button>
+      <h1 id="sec-title">Dashboard</h1>
+      <span style="flex:1"></span>
+      <span id="who" style="color:var(--muted);font-size:13px"></span>
+      <button class="btn btn-ghost btn-sm" id="signout">Sign out</button>
+    </div>
+    <div id="view"></div>
+  </main>
+</div>
+<script type="module" src="js/pages/admin.js"></script>
+</body>
+</html>

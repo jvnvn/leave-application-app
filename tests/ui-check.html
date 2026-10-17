@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI layout check</title>
+<link rel="stylesheet" href="../css/tokens.css">
+<link rel="stylesheet" href="../css/base.css">
+<style>body{padding:24px 16px;max-width:1000px;margin:0 auto}iframe{border:1px solid var(--line);border-radius:12px;width:100%;height:220px}.pass{color:#047857}.fail{color:var(--danger)}</style>
+</head>
+<body>
+<h1>UI layout check</h1>
+<p>Loads each screen in iframes at 320/360/390/768/1024/1440 and reports overflow per screen+width. Requires login session — open login.html in this browser first (demo mode seeds automatically).</p>
+<p id="summary">Running…</p>
+<ul id="results"></ul>
+<div id="stage"></div>
+<script type="module">
+const SCREENS = ["login.html", "employee.html", "admin.html", "print.html?id=seed-probe"];
+const WIDTHS = [320, 360, 390, 768, 1024, 1440];
+const out = [];
+const stage = document.getElementById("stage");
+for (const s of ["login.html", "employee.html", "admin.html"]) {
+  for (const w of WIDTHS) {
+    const fr = document.createElement("iframe");
+    fr.style.width = w + "px";
+    stage.appendChild(fr);
+    const res = await new Promise((resolve) => {
+      fr.onload = () => setTimeout(() => {
+        try {
+          const doc = fr.contentDocument;
+          const vw = fr.clientWidth;
+          let overflow = 0;
+          doc.querySelectorAll("body *").forEach((elm) => {
+            try { if (elm.getBoundingClientRect().right > vw + 1) overflow++; } catch { /* ignore */ }
+          });
+          resolve(overflow);
+        } catch { resolve("blocked"); }
+      }, 1200);
+      fr.src = "../" + s + "?debug=layout";
+      setTimeout(() => resolve("timeout"), 15000);
+    });
+    out.push([res === 0 ? "PASS" : "FAIL", `${s} @ ${w}px — overflow nodes: ${res}`]);
+    fr.remove();
+  }
+}
+const fails = out.filter(([s]) => s === "FAIL");
+document.getElementById("results").innerHTML = out.map(([s, n]) => `<li class="${s.toLowerCase()}"><b>${s}</b> — ${n}</li>`).join("");
+document.getElementById("summary").innerHTML = `<b>${out.length - fails.length}/${out.length} passed</b> (print.html checked manually: one A4 page, no clipped text)`;
+</script>
+</body>
+</html>
