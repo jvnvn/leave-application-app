@@ -25,7 +25,7 @@ export const APP_CONFIG = {
   email: {
     publicKey: "2f_1JJpxnduD2lyNl", // emailjs.com → Account → General → Public Key (safe to expose)
     serviceId: "service_c12gp18", // Email Services → service ID (service_xxxx)
-    templateId: "template_18wwluo", // Email Templates → template ID (template_xxxx)
+    templateId: "template_e8tdk78", // Email Templates → template ID (template_xxxx)
   },
   // ?emulator=1|0 connects/disconnects the Firestore/Auth adapters to local
   // emulators. Resolved (and persisted for the tab) below from the URL.
