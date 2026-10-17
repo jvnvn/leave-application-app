@@ -1,5 +1,5 @@
-data/
-uploads/
+/data/
+/uploads/
 node_modules/
 LeaveMS-android/.gradle/
 LeaveMS-android/app/build/
