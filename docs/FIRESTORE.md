@@ -162,9 +162,15 @@ cached session cleared on firestore boot**.
 - Firebase console steps (§0–§1) and `firebase login` + deploy.
 - Real-project smoke test after deploy (repeat §3 flows against production
   with two test accounts, then delete them).
-- Invite/reset emails in production: currently HR copies the link from the
-  app and sends it (email/SMS/chat). For automatic sending, add a Cloud
-  Function later (Blaze) — `repo.inviteUser` / `repo.requestPasswordReset`
-  are the two seams to hook.
+- Invite emails: automatic via EmailJS (free tier, REST — no SDK, no Cloud
+  Functions) once `js/config.js` → `email: { publicKey, serviceId, templateId }`
+  is filled. Setup: create an account at emailjs.com → add an email service
+  (e.g. Gmail) → create a template whose "To Email" field is `{{to_email}}`
+  and whose body uses `{{to_name}}`, `{{invite_link}}`, `{{expires_hours}}`,
+  `{{org_name}}`, `{{app_name}}` → paste the three IDs into `js/config.js` and
+  add the site origin under EmailJS → Account → Security (allowed origins).
+  Unconfigured, the app keeps the copy-link flow (the "Invites & Resets"
+  section shows an Email resend button only when configured). Password-reset
+  emails are already automatic via Firebase Auth.
 - Visual pass of employee/admin screens at 360 px + desktop (see
   `tests/ui-check.html`).
