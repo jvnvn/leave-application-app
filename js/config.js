@@ -6,7 +6,7 @@
  */
 export const APP_CONFIG = {
   appName: "Leave Management System",
-  orgName: "Sample Organization Inc.",
+  orgName: "Municipality of Aurora, Isabela",
   // Firebase Web SDK (modular) is loaded lazily via dynamic import() from the
   // official gstatic CDN on first data access.
   firebaseCdnVersion: "12.4.0",
