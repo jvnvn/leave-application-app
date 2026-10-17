@@ -110,3 +110,26 @@ button.cal-day { color: inherit; padding: 0; cursor: pointer; min-height: 44px; 
 .timeline li::before { content: ""; position: absolute; left: 6px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--indigo); }
 .timeline li::after { content: ""; position: absolute; left: 9px; top: 18px; bottom: 0; width: 2px; background: var(--line); }
 .timeline li:last-child::after { display: none; }
+
+/* Install-app strip (js/pwa.js) — floating banner, sticks while scrolling. */
+.install-strip {
+  position: sticky; top: 0; z-index: var(--z-strip);
+  margin: var(--space-3) 16px;
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: 10px 10px 10px 14px;
+  background: var(--indigo-tint); border: 1px solid var(--line);
+  border-radius: var(--radius-pill); box-shadow: var(--shadow-soft);
+}
+.install-strip-text { flex: 1; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+.install-strip-btn {
+  flex: none; border: 0; border-radius: var(--radius-pill);
+  background: var(--indigo); color: #fff;
+  font: inherit; font-size: var(--fs-sm); font-weight: 700;
+  padding: 8px 14px; cursor: pointer;
+}
+.install-strip-x {
+  flex: none; border: 0; background: transparent; color: var(--muted);
+  font-size: var(--fs-base); line-height: 1; padding: 6px 8px; cursor: pointer;
+}
+.install-steps { margin: 0 0 16px; padding-left: 20px; font-size: var(--fs-base); color: var(--ink-2); }
+.install-steps li { margin-bottom: 6px; }
