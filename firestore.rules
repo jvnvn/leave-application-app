@@ -38,9 +38,18 @@ service cloud.firestore {
     function validTransition(from, to) {
       return (from == 'DRAFT' && to in ['PENDING', 'CANCELLED'])
         || (from == 'PENDING' && to in ['UNDER_REVIEW', 'REJECTED', 'CANCELLED', 'APPROVED'])
-        || (from == 'UNDER_REVIEW' && to in ['FOR_SUPERVISOR_REVIEW', 'FOR_FINAL_APPROVAL', 'APPROVED', 'REJECTED'])
-        || (from == 'FOR_SUPERVISOR_REVIEW' && to in ['FOR_FINAL_APPROVAL', 'APPROVED', 'REJECTED'])
-        || (from == 'FOR_FINAL_APPROVAL' && to in ['APPROVED', 'REJECTED']);
+        || (from == 'UNDER_REVIEW' && to in ['FOR_SUPERVISOR_REVIEW', 'FOR_FINAL_APPROVAL', 'APPROVED', 'REJECTED', 'CANCELLED'])
+        || (from == 'FOR_SUPERVISOR_REVIEW' && to in ['FOR_FINAL_APPROVAL', 'REJECTED', 'CANCELLED'])
+        || (from == 'FOR_FINAL_APPROVAL' && to in ['APPROVED', 'REJECTED', 'CANCELLED']);
+    }
+
+    // Which reviewer tier may move an application from `from`.
+    // Legacy PENDING/UNDER_REVIEW rows are resolved by HR (grandfathered).
+    function reviewerStageOk(role, from, to) {
+      return to != 'CANCELLED' && (
+        (from == 'FOR_SUPERVISOR_REVIEW' && role in ['supervisor', 'sys_admin']) ||
+        ((from == 'FOR_FINAL_APPROVAL' || from == 'PENDING' || from == 'UNDER_REVIEW') && isHr(role))
+      );
     }
 
     // Self-signup only with a valid invite: the token (HR-issued secret)
@@ -83,10 +92,12 @@ service cloud.firestore {
       allow get: if signedIn() && (!exists(/databases/$(database)/documents/leaveApplications/$(appId)) || owner() || isReviewer(myRole()));
       allow list: if signedIn() && (isReviewer(myRole()) || resource.data.uid == myUid());
       allow create: if signedIn() && request.resource.data.uid == myUid()
-        && request.resource.data.status == 'PENDING';
-      allow update: if signedIn() && isReviewer(myRole())
+        && request.resource.data.status in ['PENDING', 'FOR_SUPERVISOR_REVIEW'];
+      allow update: if signedIn()
+        && request.resource.data.uid == resource.data.uid
         && validTransition(resource.data.status, request.resource.data.status)
-        && request.resource.data.uid == resource.data.uid;
+        && (owner() && request.resource.data.status == 'CANCELLED'
+          || reviewerStageOk(myRole(), resource.data.status, request.resource.data.status));
       allow delete: if false;
 
       match /approvals/{id} {
@@ -118,7 +129,7 @@ service cloud.firestore {
     match /leaveBalanceTransactions/{id} {
       allow get: if signedIn() && (!exists(/databases/$(database)/documents/leaveBalanceTransactions/$(id)) || owner() || isHr(myRole()));
       allow list: if signedIn() && (isReviewer(myRole()) || resource.data.uid == myUid());
-      allow create: if signedIn() && isReviewer(myRole());
+      allow create: if signedIn() && (isReviewer(myRole()) || request.resource.data.uid == myUid());
       allow update, delete: if false;
     }
 
