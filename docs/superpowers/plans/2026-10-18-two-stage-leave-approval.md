@@ -31,7 +31,7 @@
 - Create: `docs/superpowers/specs/2026-10-18-two-stage-leave-approval-design.md` (already written)
 - Create: `docs/superpowers/plans/2026-10-18-two-stage-leave-approval.md` (this file)
 
-- [ ] **Step 1: Commit**
+- [x] **Step 1: Commit**
 
 ```powershell
 $env:GIT_MASTER='1'; git add docs/superpowers; git commit -m "docs: two-stage leave approval design and plan"
@@ -50,7 +50,7 @@ $env:GIT_MASTER='1'; git add docs/superpowers; git commit -m "docs: two-stage le
 - `reviewActionsFor(role: string, status: string): string[]` (target statuses)
 - `isCancellable(status): boolean` — extended; `canTransition(from, to)` — extended
 
-- [ ] **Step 1: Write the failing check**
+- [x] **Step 1: Write the failing check**
 
 Run this red test (expected: FAIL on current code because `isCancellable('FOR_FINAL_APPROVAL')` is false today):
 
@@ -60,7 +60,7 @@ node --input-type=module -e "const m=await import('file:///C:/Users/tyron/Pictur
 
 Expected: `FAIL` (exit 1).
 
-- [ ] **Step 2: Read the current file and apply the edits**
+- [x] **Step 2: Read the current file and apply the edits**
 
 Read `js/core/rules.js` first, then:
 
@@ -116,11 +116,11 @@ export function reviewActionsFor(role, status) {
 
 Note: if the current file wraps `isCancellable` around an inline array, replace that inline array with `CANCELLABLE`.
 
-- [ ] **Step 3: Run the check again — expected PASS**
+- [x] **Step 3: Run the check again — expected PASS**
 
 Same command as Step 1. Expected: `PASS` (exit 0).
 
-- [ ] **Step 4: Syntax check + commit**
+- [x] **Step 4: Syntax check + commit**
 
 ```powershell
 node --check js/core/rules.js
@@ -136,7 +136,7 @@ $env:GIT_MASTER='1'; git add js/core/rules.js; git commit -m "feat: staged trans
 
 **Consumes:** the Task 1 matrix (mirrored by hand — rules are a separate language).
 
-- [ ] **Step 1: Read the file and update `validTransition`**
+- [x] **Step 1: Read the file and update `validTransition`**
 
 Read `firestore.rules` fully first. The current validTransition mirrors the old table; update each `from` branch so it matches Task 1 step 2(a) exactly, including:
 - `UNDER_REVIEW`: add `'CANCELLED'`
@@ -144,7 +144,7 @@ Read `firestore.rules` fully first. The current validTransition mirrors the old 
 - `FOR_FINAL_APPROVAL`: `['APPROVED', 'REJECTED', 'CANCELLED']`
 - `DRAFT`, `PENDING`: unchanged
 
-- [ ] **Step 2: Add the stage gate function**
+- [x] **Step 2: Add the stage gate function**
 
 Insert near the other helper functions (keep the file's existing formatting style):
 
@@ -161,7 +161,7 @@ Insert near the other helper functions (keep the file's existing formatting styl
 
 Verify `isHr(role)` exists and includes `sys_admin`; if the existing helper differs (e.g. `isHr()` drains role differently), adapt the call, not the semantics.
 
-- [ ] **Step 3: Rewrite the `leaveApplications` update + create rules**
+- [x] **Step 3: Rewrite the `leaveApplications` update + create rules**
 
 Update rule (replace the old `isReviewer(myRole()) && validTransition(...)` clause; preserve any other conditions the old rule had, e.g. uid immutable):
 
@@ -183,11 +183,11 @@ Create rule: keep all existing checks, change the status check to:
 
 (`PENDING` retained for stale cached PWA clients still on the old bundle.)
 
-- [ ] **Step 4: Sanity-check role wiring for stage-1 rejection**
+- [x] **Step 4: Sanity-check role wiring for stage-1 rejection**
 
 Supervisor reject (`FOR_SUPERVISOR_REVIEW → REJECTED`) releases the balance hold inside the adapter transaction, so it writes `leaveBalances`. Read the `leaveBalances` update rule; confirm a supervisor-role actor can perform that settle write. (Historically any reviewer could reject from PENDING with the same transaction, so this is expected to already pass — if it does not, extend the balance rule's permitted roles to include `supervisor` and `sys_admin` for `taken`/`pending` changes only.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 $env:GIT_MASTER='1'; git add firestore.rules; git commit -m "feat: enforce staged review roles in firestore rules"
@@ -204,13 +204,13 @@ $env:GIT_MASTER='1'; git add firestore.rules; git commit -m "feat: enforce stage
 
 **Consumes:** `canReviewStage`, `reviewActionsFor`, `isCancellable` from `js/core/rules.js` (check the file's existing import from `../core/rules.js` and add to it).
 
-- [ ] **Step 1: `submitApplication` — new first status + supervisor notification**
+- [x] **Step 1: `submitApplication` — new first status + supervisor notification**
 
 Read the function first. Changes:
 - Written status: `"FOR_SUPERVISOR_REVIEW"` (was `"PENDING"`).
 - Replace the HR notification with a supervisor-targeted one, e.g. title `"New leave application"`, body `` `${leaveTypeName} from ${employeeName}` ``, using whatever notification helper the function currently uses (keep its shape; swap the audience/roles to `["supervisor"]`).
 
-- [ ] **Step 2: `reviewApplication` — stage guard + copy**
+- [x] **Step 2: `reviewApplication` — stage guard + copy**
 
 At the top of the function, before the transaction:
 
@@ -229,16 +229,16 @@ After the transaction, replace the notification block with staged copy:
 
 Remove the old `Leave ${action.toLowerCase()}` interpolation.
 
-- [ ] **Step 3: `cancelApplication` — extended statuses + owner guard**
+- [x] **Step 3: `cancelApplication` — extended statuses + owner guard**
 
 - Replace the hardcoded cancellable-status list with `isCancellable(app.status)`.
 - Add, before the transaction: `if (app.uid !== actor.uid) throw new Error("Only the owner can cancel this application.");` (if the function has no `actor` parameter today, add one and pass it from the `employee.js` call site — align with how `reviewApplication` receives `actor`).
 
-- [ ] **Step 4: `addDocument` — allowed statuses**
+- [x] **Step 4: `addDocument` — allowed statuses**
 
 Extend the attachable-status list from `["DRAFT", "PENDING", "UNDER_REVIEW"]` to `["DRAFT", "PENDING", "UNDER_REVIEW", "FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL"]`.
 
-- [ ] **Step 5: Syntax check + commit**
+- [x] **Step 5: Syntax check + commit**
 
 ```powershell
 node --check js/data/firestore-adapter.js
@@ -254,11 +254,11 @@ $env:GIT_MASTER='1'; git add js/data/firestore-adapter.js; git commit -m "feat: 
 
 **Consumes:** `reviewActionsFor`, `reviewStage` from `../core/rules.js`.
 
-- [ ] **Step 1: Read the drawer + handler**
+- [x] **Step 1: Read the drawer + handler**
 
 Note the variable holding the current user (role source) — reuse it in the new code below.
 
-- [ ] **Step 2: Replace the fixed decision buttons**
+- [x] **Step 2: Replace the fixed decision buttons**
 
 Where the drawer currently renders Approve / Reject / Mark under review / Forward buttons, compute:
 
@@ -277,11 +277,11 @@ When `actions.length === 0 && stage` render a muted hint instead:
 
 Keep the Print button and non-decision elements as-is. The comment-required-for-reject logic in the handler stays.
 
-- [ ] **Step 3: Toast copy**
+- [x] **Step 3: Toast copy**
 
 Replace the generic toast with an action map: `FOR_FINAL_APPROVAL` → `"Sent to HR for final approval"`, `APPROVED` → `"Approved"`, `REJECTED` → `"Rejected"`.
 
-- [ ] **Step 4: Syntax check + commit**
+- [x] **Step 4: Syntax check + commit**
 
 ```powershell
 node --check js/pages/admin.js
@@ -296,15 +296,15 @@ $env:GIT_MASTER='1'; git add js/pages/admin.js; git commit -m "feat: stage-aware
 - Modify: `js/pages/employee.js` (attachable-status list ~L172; cancel flow already uses `isCancellable`)
 - Modify: `js/ui/components.js` (timeline ~L114–121)
 
-- [ ] **Step 1: Extend the attachable list**
+- [x] **Step 1: Extend the attachable list**
 
 In `employee.js`, add `"FOR_SUPERVISOR_REVIEW"` and `"FOR_FINAL_APPROVAL"` to the list that gates the attach-document UI.
 
-- [ ] **Step 2: Friendly timeline labels**
+- [x] **Step 2: Friendly timeline labels**
 
 In `components.js` `timelineHtml`, render the approval action through the friendly label map instead of the raw code — `STATUS_LABEL[h.action] || h.action` (import `STATUS_LABEL` from `../core/constants.js` if not already imported).
 
-- [ ] **Step 3: Syntax check + commit**
+- [x] **Step 3: Syntax check + commit**
 
 ```powershell
 node --check js/pages/employee.js; node --check js/ui/components.js
@@ -318,7 +318,7 @@ $env:GIT_MASTER='1'; git add js/pages/employee.js js/ui/components.js; git commi
 **Files:**
 - Modify: `tests/e2e-firestore.mjs` (read fully first; ~240 lines — helpers: playwright browser against `APP_URL`, app modules via `tests/blank.html?emulator=1`)
 
-- [ ] **Step 1: Update the happy-path assertions**
+- [x] **Step 1: Update the happy-path assertions**
 
 Change the flow section from `PENDING → APPROVED` to:
 1. submit → assert `FOR_SUPERVISOR_REVIEW` (and hold incremented — existing balance assertions keep their meaning)
@@ -327,7 +327,7 @@ Change the flow section from `PENDING → APPROVED` to:
 
 Use the test's existing helpers; the `sys_admin` bootstrap account (`bootstrap-emulator.mjs` → admin@example.com / Admin123!) can legally act at both stages.
 
-- [ ] **Step 2: Add deny cases**
+- [x] **Step 2: Add deny cases**
 
 Add assertions (using the test's existing auth/account helpers; create an extra account via the emulator Auth REST API if needed):
 - supervisor-role actor: `reviewApplication({action: "APPROVED"})` on a `FOR_SUPERVISOR_REVIEW` app rejects (throws), status unchanged.
@@ -337,7 +337,7 @@ Add assertions (using the test's existing auth/account helpers; create an extra 
 
 If the harness lacks multi-account auth helpers and adding them balloons scope, cover at minimum: happy path, the `FOR_FINAL_APPROVAL`-stage cancel (exercises owner clause), and one rules-deny REST check; note any deferred cases in the commit message.
 
-- [ ] **Step 3: Run it**
+- [x] **Step 3: Run it**
 
 Prereqs check first: `firebase --version`, `java -version`, `npx playwright --version` (or the repo's known playwright source).
 
@@ -349,7 +349,7 @@ firebase emulators:exec --only firestore,auth --project leaveapplication-d9556 "
 
 Expected: PASS. If the environment cannot run the emulator (no Java, missing playwright), record that and lean on Task 8 live smoke as the primary behavioral evidence.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 $env:GIT_MASTER='1'; git add tests/e2e-firestore.mjs; git commit -m "test: cover two-stage approval flow and stage denies"
@@ -359,7 +359,7 @@ $env:GIT_MASTER='1'; git add tests/e2e-firestore.mjs; git commit -m "test: cover
 
 ### Task 7: Deploy rules live
 
-- [ ] **Step 1: Deploy**
+- [x] **Step 1: Deploy**
 
 ```powershell
 $env:GIT_MASTER='1'; firebase deploy --only firestore:rules --project leaveapplication-d9556
@@ -367,7 +367,7 @@ $env:GIT_MASTER='1'; firebase deploy --only firestore:rules --project leaveappli
 
 Expected: `Deploy complete!`. (Requires `firebase login` as the project owner — was used before in this project.)
 
-- [ ] **Step 2: Unauthenticated deny probe**
+- [x] **Step 2: Unauthenticated deny probe**
 
 Quick REST probe confirming rules are live (expect 403):
 
@@ -382,19 +382,19 @@ Expected: `403`.
 
 ### Task 8: Push + live smoke
 
-- [ ] **Step 1: Push**
+- [x] **Step 1: Push**
 
 ```powershell
 $env:GIT_MASTER='1'; git push jvnvn frontend-only:main
 ```
 
-- [ ] **Step 2: Recreate the browser rig**
+- [x] **Step 2: Recreate the browser rig**
 
 - CDP Chromium on port 9222 (dedicated profile), Playwright via MCP `cdp_url: http://localhost:9222`.
 - Static server on port 8091 from `C:\Users\tyron\AppData\Local\Temp\opencode\` serving the repo root.
 - GitHub Pages CDN TTL is ~10 min — verify freshness by fetching the new bundle marker with `cache: 'no-store'` (e.g. `"FOR_SUPERVISOR_REVIEW"` in `js/data/firestore-adapter.js`, `"send to HR"` in `js/pages/admin.js`).
 
-- [ ] **Step 3: Live smoke (live site, real accounts)**
+- [x] **Step 3: Live smoke (live site, real accounts)**
 
 Login `admin@hr.com` (sys_admin — passes both stages):
 1. Employee-side submit (or use an existing employee account) → application shows `With supervisor`, hold applied.
@@ -403,9 +403,15 @@ Login `admin@hr.com` (sys_admin — passes both stages):
 4. Reject path at the first stage → `Rejected`, hold released.
 (If no supervisor-role account exists, sys_admin covers both stages; optionally create a Supervisor via Invites & Resets to also verify the role-gated path — note result.)
 
-- [ ] **Step 4: Final state check**
+- [x] **Step 4: Final state check**
 
 `git status` clean; report what was verified vs. deferred.
+
+**Execution record (2026-10-18, final):**
+- Live smoke on the deployed site: **26/26 PASS** — submit → `With supervisor` (pending +1) → stage-1 approve → `Final approval` → final approve → `Approved` (pending→used settles exactly once) → timeline `SUBMITTED → FOR_FINAL_APPROVAL → APPROVED`; cancel path releases hold; first-stage reject releases hold; list shows Approved/Cancelled/Rejected.
+- Emulator E2E: 49/49. Rules live: `Deploy complete!`; unauthenticated REST probe → 403. Push: `2ce2de1..5266891`.
+- Deviations (per Step 3 notes): no live supervisor-role account — `sys_admin` covered both stages; employee submit/cancel exercised as `sys_admin` via page-context modules. First smoke pass hit intermittent GitHub-Pages connection resets (5 spurious FAILs; underlying data independently verified via probe); after hardening the rig with retries the rerun passed 26/26.
+- Footprint: `sDDvfLPBCWRQ8cLOLbMCpAL50rL2_vacation` earned 3 / used 2 / pending 0. Smoke apps 2026-12-07 (Approved, `PUOp06KxmgtiuNNvudy1`), 2026-12-08 (Cancelled), 2026-12-09 (Rejected).
 
 ---
 
