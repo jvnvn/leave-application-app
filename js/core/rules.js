@@ -7,15 +7,15 @@ import { MULTI_STEP_CODES } from "./constants.js";
 export const TRANSITIONS = {
   DRAFT: ["PENDING", "CANCELLED"],
   PENDING: ["UNDER_REVIEW", "REJECTED", "CANCELLED", "APPROVED"],
-  UNDER_REVIEW: ["FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL", "APPROVED", "REJECTED"],
-  FOR_SUPERVISOR_REVIEW: ["FOR_FINAL_APPROVAL", "APPROVED", "REJECTED"],
-  FOR_FINAL_APPROVAL: ["APPROVED", "REJECTED"],
+  UNDER_REVIEW: ["FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL", "APPROVED", "REJECTED", "CANCELLED"],
+  FOR_SUPERVISOR_REVIEW: ["FOR_FINAL_APPROVAL", "REJECTED", "CANCELLED"],
+  FOR_FINAL_APPROVAL: ["APPROVED", "REJECTED", "CANCELLED"],
   APPROVED: [],
   REJECTED: [],
   CANCELLED: [],
 };
 
-const CANCELLABLE = new Set(["DRAFT", "PENDING", "UNDER_REVIEW"]);
+const CANCELLABLE = new Set(["DRAFT", "PENDING", "UNDER_REVIEW", "FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL"]);
 
 export function canTransition(from, to) {
   return (TRANSITIONS[from] || []).includes(to);
@@ -23,6 +23,31 @@ export function canTransition(from, to) {
 
 export function isCancellable(status) {
   return CANCELLABLE.has(status);
+}
+
+/** Which reviewer tier may act on an undecided application right now.
+ * Legacy PENDING/UNDER_REVIEW rows are resolved by HR directly (grandfathered). */
+export function reviewStage(status) {
+  if (status === "FOR_SUPERVISOR_REVIEW") return "supervisor";
+  if (status === "FOR_FINAL_APPROVAL") return "hr";
+  if (status === "PENDING" || status === "UNDER_REVIEW") return "hr";
+  return null;
+}
+
+export function canReviewStage(role, status) {
+  const stage = reviewStage(status);
+  if (!stage) return false;
+  if (role === "sys_admin") return true;
+  if (stage === "supervisor") return role === "supervisor";
+  return role === "hr_staff" || role === "hr_admin";
+}
+
+/** Target statuses the role may move the application to (drawer + adapter guard).
+ * Filtered through canTransition so drift between the two can't offer dead actions. */
+export function reviewActionsFor(role, status) {
+  if (!canReviewStage(role, status)) return [];
+  const targets = status === "FOR_SUPERVISOR_REVIEW" ? ["FOR_FINAL_APPROVAL", "REJECTED"] : ["APPROVED", "REJECTED"];
+  return targets.filter((to) => canTransition(status, to));
 }
 
 /** Exclude Saturdays, Sundays and holidays. 0 if end < start or invalid. */
