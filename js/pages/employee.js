@@ -169,7 +169,7 @@ async function openDetail(id) {
   const d = await applicationDetail(id);
   if (!d) { closeOverlays(); toast("Not found", "error"); return; }
   const cancellable = isCancellable(d.status) && d.uid === user.uid;
-  const attachable = ["DRAFT", "PENDING", "UNDER_REVIEW"].includes(d.status) && d.uid === user.uid;
+  const attachable = ["DRAFT", "PENDING", "UNDER_REVIEW", "FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL"].includes(d.status) && d.uid === user.uid;
   openSheet(`
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <h3 class="ow" style="margin:0;flex:1">${esc(d.leaveTypeName || d.leaveTypeCode || "Leave")}</h3>

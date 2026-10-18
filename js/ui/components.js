@@ -114,7 +114,7 @@ export function avatarHtml(name, color) {
 export function timelineHtml(history) {
   if (!history || !history.length) return `<p style="color:var(--muted)">No history yet.</p>`;
   return `<ul class="timeline">${history.map((h) => `<li>
-    <b class="ow">${esc(h.action || "")}</b> <span style="color:var(--muted)">· ${esc(h.step || "")}</span><br>
+    <b class="ow">${esc(STATUS_LABEL[h.action] || h.action || "")}</b> <span style="color:var(--muted)">· ${esc(h.step || "")}</span><br>
     <span class="ow" style="font-size:13px">${esc(h.comment || "")}</span><br>
     <span style="font-size:12px;color:var(--muted)">${esc(h.approverName || "")} · ${esc(h.timestamp || "")}</span>
   </li>`).join("")}</ul>`;
