@@ -12,7 +12,7 @@
  * Dates of leave stay "YYYY-MM-DD" strings; timestamps convert ISO string
  * <-> Date (stored as Firestore Timestamp) at this boundary only.
  */
-import { calcWorkingDays, canTransition, remaining } from "../core/rules.js";
+import { calcWorkingDays, canTransition, isCancellable, remaining, reviewActionsFor } from "../core/rules.js";
 import { firebaseCtx } from "./firebase-app.js";
 
 const SUBS = { approvals: "approvals", documents: "documents" };
@@ -262,9 +262,9 @@ export const firestoreAdapter = {
       const bal = peekSnap.exists() ? peekSnap.data() : { earned: 0, used: 0, pending: 0 };
       if (!noBalance && remaining(bal.earned, bal.used, bal.pending) < days) throw new Error("Insufficient leave balance");
       const appRef = fsMod.doc(fsMod.collection(db, "leaveApplications"));
-      tx.set(appRef, { ...toDoc(application), workingDays: days, leaveTypeName: lt.name, status: "PENDING", submittedAt: new Date(), updatedAt: new Date() });
+      tx.set(appRef, { ...toDoc(application), workingDays: days, leaveTypeName: lt.name, status: "FOR_SUPERVISOR_REVIEW", submittedAt: new Date(), updatedAt: new Date() });
       // One role broadcast (no user-directory query — employees can't list users).
-      tx.set(fsMod.doc(fsMod.collection(db, "notifications")), { uid: "", forRoles: ["hr_staff", "hr_admin", "sys_admin"], title: "New leave application", body: `${lt.name} from ${application.employeeName || ""}`, type: "leave", read: false, createdAt: new Date() });
+      tx.set(fsMod.doc(fsMod.collection(db, "notifications")), { uid: "", forRoles: ["supervisor"], title: "New leave application", body: `${lt.name} from ${application.employeeName || ""}`, type: "leave", read: false, createdAt: new Date() });
       tx.set(fsMod.doc(fsMod.collection(db, "leaveApplications", appRef.id, SUBS.approvals)), { applicationId: appRef.id, step: "SUBMISSION", approverUid: application.uid, action: "SUBMITTED", comment: "Application submitted", timestamp: new Date() });
       if (!noBalance) {
         tx.set(fsMod.doc(db, "leaveBalances", bId), { uid: application.uid, leaveTypeCode: application.leaveTypeCode, earned: bal.earned || 0, used: bal.used || 0, pending: (bal.pending || 0) + days });
@@ -287,6 +287,7 @@ export const firestoreAdapter = {
       if (!aSnap.exists()) throw new Error("Application not found");
       const app = aSnap.data();
       if (!canTransition(app.status, action)) throw new Error(`Cannot move from ${app.status} to ${action}`);
+      if (!reviewActionsFor(actor.role, app.status).includes(action)) throw new Error("Your role cannot perform that action at this stage");
       if (action === "REJECTED" && !comment.trim()) throw new Error("A comment is required to reject");
       const ltSnap = await tx.get(fsMod.doc(db, "leaveTypes", app.leaveTypeCode));
       const ltMax = ltSnap.exists() ? ltSnap.data().maxDays || 0 : 0;
@@ -301,7 +302,15 @@ export const firestoreAdapter = {
         tx.set(fsMod.doc(db, "leaveBalances", bId), { ...bal, used, pending: Math.max(0, (bal.pending || 0) - app.workingDays) });
         tx.set(fsMod.doc(fsMod.collection(db, "leaveBalanceTransactions")), { uid: app.uid, leaveTypeCode: app.leaveTypeCode, type: action === "APPROVED" ? "debit" : "release", days: app.workingDays, applicationId, actorUid: actor.uid, createdAt: new Date() });
       }
-      tx.set(fsMod.doc(fsMod.collection(db, "notifications")), { uid: app.uid, title: `Leave ${action.toLowerCase()}`, body: comment || action, type: "leave", read: false, createdAt: new Date() });
+      const notice = action === "FOR_FINAL_APPROVAL"
+        ? { title: "Approved by supervisor", body: "Your leave request is with HR for final approval" }
+        : action === "APPROVED"
+          ? { title: "Leave approved", body: "Your leave request has been approved" }
+          : { title: "Leave rejected", body: comment || "Your leave request was rejected" };
+      tx.set(fsMod.doc(fsMod.collection(db, "notifications")), { uid: app.uid, ...notice, type: "leave", read: false, createdAt: new Date() });
+      if (action === "FOR_FINAL_APPROVAL") {
+        tx.set(fsMod.doc(fsMod.collection(db, "notifications")), { uid: "", forRoles: ["hr_staff", "hr_admin"], title: "Leave for final approval", body: `${app.leaveTypeName || "Leave"} from ${app.employeeName || ""}`, type: "leave", read: false, createdAt: new Date() });
+      }
       tx.set(fsMod.doc(fsMod.collection(db, "auditLogs")), { actorUid: actor.uid, action: "application_" + action.toLowerCase(), entity: "leave_application", entityId: applicationId, createdAt: new Date() });
       return { ok: true };
     });
@@ -315,7 +324,8 @@ export const firestoreAdapter = {
       const aSnap = await tx.get(aRef);
       if (!aSnap.exists()) throw new Error("Application not found");
       const app = aSnap.data();
-      if (!["DRAFT", "PENDING", "UNDER_REVIEW"].includes(app.status)) throw new Error("Cannot cancel at stage " + app.status);
+      if (app.uid !== actor.uid) throw new Error("Only the owner can cancel this application");
+      if (!isCancellable(app.status)) throw new Error("Cannot cancel at stage " + app.status);
       const bId = `${app.uid}_${app.leaveTypeCode}`;
       const bSnap = await tx.get(fsMod.doc(db, "leaveBalances", bId));
       if (bSnap.exists()) tx.update(fsMod.doc(db, "leaveBalances", bId), { pending: Math.max(0, (bSnap.data().pending || 0) - app.workingDays) });
@@ -331,7 +341,7 @@ export const firestoreAdapter = {
     const { fsMod } = fns;
     const aSnap = await fsMod.getDoc(fsMod.doc(db, "leaveApplications", applicationId));
     if (!aSnap.exists()) throw new Error("Application not found");
-    if (!["DRAFT", "PENDING", "UNDER_REVIEW"].includes(aSnap.data().status)) throw new Error("Cannot attach documents at this stage");
+    if (!["DRAFT", "PENDING", "UNDER_REVIEW", "FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL"].includes(aSnap.data().status)) throw new Error("Cannot attach documents at this stage");
     const ref = await fsMod.addDoc(fsMod.collection(db, "leaveApplications", applicationId, SUBS.documents), { ...(doc || {}), applicationId, uploadedAt: new Date() });
     return { id: ref.id };
   },
