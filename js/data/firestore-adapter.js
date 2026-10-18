@@ -80,39 +80,77 @@ function applyConstraints(fsMod, ref, query = {}) {
   return cs.length ? fsMod.query(ref, ...cs) : ref;
 }
 
+function isPermissionDenied(e) {
+  return !!e && (e.code === "permission-denied" || /insufficient permissions/i.test(e.message || ""));
+}
+
+/* permission-denied also means a stale ID token - refresh once, then retry. */
+async function withFreshAuth(run) {
+  try {
+    return await run();
+  } catch (e) {
+    if (!isPermissionDenied(e)) throw e;
+    console.error(e);
+    const { auth, fns } = await context();
+    if (!auth.currentUser) throw new Error("Your sign-in has expired - sign in again.");
+    try {
+      await fns.authMod.getIdToken(auth.currentUser, true);
+    } catch (refreshErr) {
+      console.error(refreshErr);
+    }
+    try {
+      return await run();
+    } catch (retryErr) {
+      if (!isPermissionDenied(retryErr)) throw retryErr;
+      console.error(retryErr);
+      throw new Error("Your sign-in expired or your role changed - sign in again.");
+    }
+  }
+}
+
 export const firestoreAdapter = {
   kind: "firestore",
 
   async get(collection, id) {
-    const { fns } = await context();
-    const snap = await fns.fsMod.getDoc(await resolveRef(collection, id));
-    return snap.exists() ? fromDoc(snap.id, snap) : null;
+    return withFreshAuth(async () => {
+      const { fns } = await context();
+      const snap = await fns.fsMod.getDoc(await resolveRef(collection, id));
+      return snap.exists() ? fromDoc(snap.id, snap) : null;
+    });
   },
 
   async list(collection, query = {}) {
-    const { ref, fsMod } = await colRef(collection);
-    const snap = await fsMod.getDocs(applyConstraints(fsMod, ref, query));
-    return snap.docs.map((d) => fromDoc(d.id, d));
+    return withFreshAuth(async () => {
+      const { ref, fsMod } = await colRef(collection);
+      const snap = await fsMod.getDocs(applyConstraints(fsMod, ref, query));
+      return snap.docs.map((d) => fromDoc(d.id, d));
+    });
   },
 
   async create(collection, data, optionalId) {
-    const { ref, fsMod } = await colRef(collection);
-    if (optionalId) {
-      await fsMod.setDoc(fsMod.doc(ref, optionalId), toDoc(data));
-      return optionalId;
-    }
-    const doc = await fsMod.addDoc(ref, toDoc(data));
-    return doc.id;
+    return withFreshAuth(async () => {
+      const { ref, fsMod } = await colRef(collection);
+      if (optionalId) {
+        await fsMod.setDoc(fsMod.doc(ref, optionalId), toDoc(data));
+        return optionalId;
+      }
+      const doc = await fsMod.addDoc(ref, toDoc(data));
+      return doc.id;
+    });
   },
 
   async update(collection, id, patch) {
-    const { fns } = await context();
-    await fns.fsMod.updateDoc(await resolveRef(collection, id), toDoc(patch));
+    return withFreshAuth(async () => {
+      const { fns } = await context();
+      await fns.fsMod.updateDoc(await resolveRef(collection, id), toDoc(patch));
+    });
   },
 
   async remove(collection, id) {
-    const { fns } = await context();
-    await fns.fsMod.deleteDoc(await resolveRef(collection, id));
+    return withFreshAuth(async () => {
+      const { fns } = await context();
+      await fns.fsMod.deleteDoc(await resolveRef(collection, id));
+    });
   },
 
   subscribe(collection, query, callback) {
