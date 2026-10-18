@@ -6,6 +6,7 @@ import { csvEscape, downloadTextFile, daysLabel } from "../core/format.js";
 import { todayISO, monthGrid, monthLabel, addMonths } from "../core/dates.js";
 import { toast, installGlobalHandlers } from "../core/toast.js";
 import { can } from "../core/constants.js";
+import { reviewActionsFor, reviewStage } from "../core/rules.js";
 import { signOut, adminSetPassword } from "../services/auth.js";
 import { allApplications, applicationDetail } from "../services/leaves.js";
 import { allBalances, transactions, adjust } from "../services/balances.js";
@@ -184,6 +185,15 @@ async function vReview(id) {
     )
   ).filter(Boolean);
   if (seq !== navSeq) return;
+  const actions = reviewActionsFor(user.role, d.status);
+  const stage = reviewStage(d.status);
+  const waiting = !actions.length && stage
+    ? `<p class="muted">${stage === "supervisor" ? "Waiting for supervisor approval" : "Waiting for HR final approval"}</p>`
+    : "";
+  const decisionBtns = actions.map((a) => {
+    const label = a === "FOR_FINAL_APPROVAL" ? "Approve — send to HR" : a === "APPROVED" ? (d.status === "FOR_FINAL_APPROVAL" ? "Approve (final)" : "Approve") : "Reject";
+    return `<button class="${a === "REJECTED" ? "btn btn-danger" : "btn btn-primary"}" data-act="${a}">${label}</button>`;
+  }).join("");
   view.innerHTML = `
     <div class="card panel"><button class="btn btn-ghost btn-sm" id="back-q">← Queue</button>
       <h3 class="ow">${esc(d.employeeName || "")} — ${esc(d.leaveTypeName || "")}</h3>
@@ -196,14 +206,11 @@ async function vReview(id) {
       <h4>Documents</h4><p>${(d.documents || []).map((x) => `<button class="btn btn-ghost btn-sm doc-open" data-path="${esc(x.path || "")}">${esc(x.fileName || "file")}</button>`).join(" ") || "—"}</p>
       <h4>Approval timeline</h4>${timelineHtml(d.approvals)}
       <h4>Decision</h4>
-      <label class="sec-label" for="rev-comment">Comment (required to reject)</label>
-      <textarea class="field ow" id="rev-comment" style="margin-bottom:10px"></textarea>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn btn-primary" data-act="APPROVED">Approve</button>
-        <button class="btn btn-danger" data-act="REJECTED">Reject</button>
-        <button class="btn btn-ghost" data-act="UNDER_REVIEW">Mark under review</button>
-        <button class="btn btn-ghost" data-act="FOR_SUPERVISOR_REVIEW">Forward to supervisor</button>
-        <button class="btn btn-ghost" data-act="FOR_FINAL_APPROVAL">Forward to final</button>
+      ${actions.length
+        ? `<label class="sec-label" for="rev-comment">Comment (required to reject)</label>
+      <textarea class="field ow" id="rev-comment" style="margin-bottom:10px"></textarea>`
+        : waiting}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${decisionBtns}
         <a class="btn btn-ghost" href="print.html?id=${esc(d.id)}" target="_blank" rel="noopener">Print form</a>
       </div></div>`;
   qs("#back-q").onclick = () => go("review");
@@ -217,7 +224,8 @@ async function vReview(id) {
     b.disabled = true;
     try {
       await review(id, action, user, comment);
-      toast(`Application ${action.toLowerCase()}`, "success");
+      const doneMsg = action === "FOR_FINAL_APPROVAL" ? "Sent to HR for final approval" : action === "APPROVED" ? "Approved" : "Rejected";
+      toast(doneMsg, "success");
       go("review");
     } catch (e) {
       toast(e.message, "error");
