@@ -50,6 +50,9 @@ const SECTIONS = [
 ];
 
 let section = "dash";
+// Race guard: a still-running render from an older go() must never write into
+// the shared #view after a newer navigation started.
+let navSeq = 0;
 let unsub = null;
 function stopLive() {
   if (unsub) { try { unsub(); } catch { /* ignore */ } unsub = null; }
@@ -69,6 +72,7 @@ function renderSide() {
 }
 
 async function go(next, arg) {
+  const seq = ++navSeq;
   stopLive();
   closeOverlays();
   section = next;
@@ -89,19 +93,23 @@ async function go(next, arg) {
     else if (next === "invites") await vInvites();
     else if (next === "settings") await vSettings();
   } catch (e) {
+    if (seq !== navSeq) return;
     console.error(e);
     view.innerHTML = errorState(e.message || "Failed to load");
     const r = qs("[data-retry]", view);
     if (r) r.onclick = () => go(section);
   }
+  if (seq !== navSeq) return;
   window.scrollTo(0, 0);
 }
 
 const thisMonth = todayISO().slice(0, 7);
 
 async function vDash() {
+  const seq = navSeq;
   view.innerHTML = `<div class="stat-grid">${"<div class='skeleton' style='height:100px'></div>".repeat(4)}</div>${skeletonList(3)}`;
   const [pending, apps, emps] = await Promise.all([pendingQueue(), allApplications({ limit: 10 }), listEmployees()]);
+  if (seq !== navSeq) return;
   const approvedMonth = apps.filter((a) => a.status === "APPROVED" && (a.startDate || "").slice(0, 7) === thisMonth).length;
   const today = todayISO();
   const onLeave = apps.filter((a) => a.status === "APPROVED" && a.startDate <= today && a.endDate >= today).length;
@@ -122,6 +130,7 @@ async function vDash() {
 }
 
 async function vApps() {
+  const seq = navSeq;
   view.innerHTML = `<div class="card panel"><h3>Applications</h3>
     <div class="filter-row">
       <select class="field" id="f-status"><option value="">All statuses</option>${["PENDING", "UNDER_REVIEW", "FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL", "APPROVED", "REJECTED", "CANCELLED"].map((s) => `<option>${s}</option>`).join("")}</select>
@@ -130,12 +139,14 @@ async function vApps() {
       <input class="field" id="f-to" type="date" aria-label="To date">
     </div><div id="apps-out">${skeletonList(4)}</div></div>`;
   const reload = debounce(async () => {
+    if (seq !== navSeq) return;
     const rows = await allApplications({
       status: qs("#f-status").value || undefined,
       search: qs("#f-search").value.trim(),
       from: qs("#f-from").value || undefined,
       to: qs("#f-to").value || undefined,
     });
+    if (seq !== navSeq) return;
     qs("#apps-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>Employee</th><th>Dept</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th></th></tr></thead>
       <tbody>${rows.map((a) => `<tr><td data-th="Employee" class="ow">${esc(a.employeeName || "")}</td><td data-th="Dept" class="ow">${esc(a.department || "")}</td>
         <td data-th="Type">${esc(a.leaveTypeName || "")}</td><td data-th="Dates">${esc(a.startDate || "")} → ${esc(a.endDate || "")}</td>
@@ -148,8 +159,10 @@ async function vApps() {
 }
 
 async function vReview(id) {
+  const seq = navSeq;
   if (!id) {
     const q = await pendingQueue();
+    if (seq !== navSeq) return;
     view.innerHTML = `<div class="card panel"><h3>Review queue (${q.length})</h3>
       ${q.length ? q.map((a) => `<div class="card req-card" style="margin-bottom:10px"><div class="req-accent ${esc(a.status)}"></div>
         <div class="req-main"><div class="req-top"><span class="req-type ow">${esc(a.employeeName || "")} — ${esc(a.leaveTypeName || "")}</span>${statusPill(a.status)}
@@ -162,6 +175,7 @@ async function vReview(id) {
   }
   view.innerHTML = skeletonList(4);
   const d = await applicationDetail(id);
+  if (seq !== navSeq) return;
   if (!d) { view.innerHTML = emptyState("🔍", "Not found"); return; }
   // Balance snapshot via known-ID gets (reviewers can't run cross-user lists).
   const bals = (
@@ -169,6 +183,7 @@ async function vReview(id) {
       ["vacation", "sick", "spl"].map((code) => repo.get("leaveBalances", `${d.uid}_${code}`).catch(() => null))
     )
   ).filter(Boolean);
+  if (seq !== navSeq) return;
   view.innerHTML = `
     <div class="card panel"><button class="btn btn-ghost btn-sm" id="back-q">← Queue</button>
       <h3 class="ow">${esc(d.employeeName || "")} — ${esc(d.leaveTypeName || "")}</h3>
@@ -212,14 +227,17 @@ async function vReview(id) {
 }
 
 async function vEmps() {
+  const seq = navSeq;
   view.innerHTML = `<div class="card panel" id="del-panel" style="display:none"><h3>Deletion requests — supervisor confirmation needed</h3><div id="del-out"></div></div>
     <div class="card panel"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><h3 style="flex:1;margin:0">Employees</h3>
     ${can(user, "employees.manage") ? `<button class="btn btn-primary btn-sm" id="add-emp">Add employee</button>` : ""}</div>
     <div id="emps-out" style="margin-top:12px">${skeletonList(4)}</div></div>`;
   const reloadDels = async () => {
     const all = await repo.list("deletionRequests", { orderBy: [["createdAt", "desc"]], limit: 50 });
+    if (seq !== navSeq) return;
     const open = all.filter((r) => r.status === "pending");
     const panel = qs("#del-panel");
+    if (!panel) return;
     if (!open.length) { panel.style.display = "none"; return; }
     panel.style.display = "";
     qs("#del-out").innerHTML = open.map((r) => `<div class="doc-row">
@@ -252,6 +270,7 @@ async function vEmps() {
   await reloadDels();
   const reload = async () => {
     const rows = (await listEmployees()).filter((e) => e.role !== "sys_admin");
+    if (seq !== navSeq || !qs("#emps-out")) return;
     qs("#emps-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>Name</th><th>Email</th><th>Dept</th><th>Role</th><th>Status</th><th></th></tr></thead>
       <tbody>${rows.map((e) => `<tr><td data-th="Name" class="ow">${esc(e.name || "")}</td><td data-th="Email" class="ow">${esc(e.email || "")}</td>
         <td data-th="Dept" class="ow">${esc(e.department || "")}</td><td data-th="Role">${esc(e.role || "")}</td><td data-th="Status">${esc(e.status || "")}</td>
@@ -347,10 +366,12 @@ async function empModal(id, reload) {
 }
 
 async function vBals(uidFilter) {
+  const seq = navSeq;
   view.innerHTML = `<div class="card panel"><h3>Leave balances</h3><div id="bals-out">${skeletonList(3)}</div></div>
     <div class="card panel"><h3>Transaction history</h3><div id="tx-out">${skeletonList(2)}</div></div>`;
   const bals = await allBalances();
   const emps = await listEmployees();
+  if (seq !== navSeq) return;
   const names = new Map(emps.map((e) => [e.id, e.name]));
   const rows = uidFilter ? bals.filter((b) => b.uid === uidFilter) : bals;
   qs("#bals-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>Employee</th><th>Type</th><th>Earned</th><th>Used</th><th>Pending</th><th>Remaining</th><th></th></tr></thead>
@@ -374,12 +395,14 @@ async function vBals(uidFilter) {
     };
   }));
   const tx = await transactions(uidFilter || bals[0]?.uid || "", undefined, 100).catch(() => []);
+  if (seq !== navSeq) return;
   qs("#tx-out").innerHTML = tx.length ? `<div class="table-scroll"><table class="data"><thead><tr><th>When</th><th>Type</th><th>Days</th><th>Kind</th><th>Reason</th></tr></thead>
     <tbody>${tx.map((t) => `<tr><td>${esc((t.createdAt || "").slice(0, 16))}</td><td>${esc(t.leaveTypeCode)}</td><td>${esc(String(t.days))}</td><td>${esc(t.type)}</td><td class="ow">${esc(t.reason || "")}</td></tr>`).join("")}</tbody></table></div>`
     : `<p style="color:var(--muted)">No transactions.</p>`;
 }
 
 async function vCal() {
+  const seq = navSeq;
   let y = +todayISO().slice(0, 4), m = +todayISO().slice(5, 7);
   view.innerHTML = `<div class="card panel"><div style="display:flex;gap:8px;align-items:center"><button class="icon-btn" id="c-p">←</button>
     <h3 id="c-t" style="flex:1;margin:0"></h3><button class="icon-btn" id="c-n">→</button></div><div id="c-g" style="margin-top:12px"></div></div>`;
@@ -387,6 +410,7 @@ async function vCal() {
     qs("#c-t").textContent = monthLabel(y, m);
     const apps = await allApplications({ limit: 500 });
     const hols = await listHolidays();
+    if (seq !== navSeq) return;
     const holSet = new Map(hols.map((h) => [h.date || h.id, h.name]));
     const byDate = new Map();
     for (const a of apps) {
@@ -428,6 +452,7 @@ async function vCal() {
 }
 
 async function vReports() {
+  const seq = navSeq;
   view.innerHTML = `<div class="card panel"><h3>Reports</h3>
     <div class="filter-row"><input class="field" id="r-from" type="month" value="${esc(thisMonth)}"><input class="field" id="r-to" type="month" value="${esc(thisMonth)}">
     <button class="btn btn-primary btn-sm" id="r-go">Run</button><button class="btn btn-ghost btn-sm" id="r-csv">Export CSV</button></div>
@@ -437,6 +462,7 @@ async function vReports() {
     const from = qs("#r-from").value ? qs("#r-from").value + "-01" : undefined;
     const to = qs("#r-to").value ? qs("#r-to").value + "-31" : undefined;
     last = await summary({ from, to });
+    if (seq !== navSeq) return;
     const tbl = (obj) => Object.entries(obj).map(([k, v]) => `<tr><td class="ow">${esc(k)}</td><td>${esc(String(v))}</td></tr>`).join("") || `<tr><td>—</td></tr>`;
     qs("#r-out").innerHTML = `<p>Total applications: <b>${last.total}</b></p>
       <div class="table-scroll"><table class="data"><thead><tr><th>By type (days)</th><th>Days</th></tr></thead><tbody>${tbl(last.byType)}</tbody></table></div>
@@ -455,18 +481,22 @@ async function vReports() {
 }
 
 async function vAudit() {
+  const seq = navSeq;
   view.innerHTML = `<div class="card panel"><h3>Audit log</h3><div id="a-out">${skeletonList(3)}</div></div>`;
   const rows = await listAudit({ limit: 200 });
+  if (seq !== navSeq) return;
   qs("#a-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Description</th></tr></thead>
     <tbody>${rows.map((r) => `<tr><td data-th="When">${esc((r.createdAt || "").slice(0, 16))}</td><td data-th="Actor" class="ow">${esc(r.actorEmail || r.actorUid || "")}</td>
       <td data-th="Action" class="ow">${esc(r.action)}</td><td data-th="Entity">${esc(r.entity)} ${esc(r.entityId)}</td><td data-th="Description" class="ow">${esc(r.description || "")}</td></tr>`).join("") || `<tr><td>No entries</td></tr>`}</tbody></table></div>`;
 }
 
 async function vHols() {
+  const seq = navSeq;
   view.innerHTML = `<div class="card panel"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="flex:1;margin:0">Holidays</h3>
     ${can(user, "holidays.manage") ? `<button class="btn btn-primary btn-sm" id="add-h">Add</button>` : ""}</div><div id="h-out" style="margin-top:12px"></div></div>`;
   const reload = async () => {
     const rows = await listHolidays();
+    if (seq !== navSeq) return;
     qs("#h-out").innerHTML = rows.map((h) => `<div class="doc-row"><span><b>${esc(h.date || h.id)}</b> — <span class="ow">${esc(h.name)}</span> <i>(${esc(h.kind)})</i></span>
       ${can(user, "holidays.manage") ? `<button class="icon-btn danger" data-del="${esc(h.date || h.id)}" aria-label="Delete">✕</button>` : ""}</div>`).join("") || emptyState("📅", "No holidays");
     qsa("[data-del]", view).forEach((b) => (b.onclick = async () => { await removeHoliday(b.dataset.del); toast("Deleted", "success"); reload(); }));
@@ -488,8 +518,10 @@ async function vHols() {
 }
 
 async function vTypes() {
+  const seq = navSeq;
   view.innerHTML = `<div class="card panel"><h3>Leave types</h3><div id="t-out">${skeletonList(3)}</div></div>`;
   const rows = await listLeaveTypes(true);
+  if (seq !== navSeq) return;
   qs("#t-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>Code</th><th>Name</th><th>Active</th><th>Requires doc</th><th>Max days</th><th></th></tr></thead>
     <tbody>${rows.map((t) => { const code = t.code || t.id; return `<tr><td data-th="Code">${esc(code)}</td><td data-th="Name" class="ow">${esc(t.name)}</td>
       <td data-th="Active">${t.active ? "yes" : "no"}</td><td data-th="Requires doc">${t.requiresDoc ? "yes" : "no"}</td><td data-th="Max days">${esc(String(t.maxDays || 0))}</td>
@@ -511,12 +543,14 @@ async function vTypes() {
 }
 
 async function vInvites() {
+  const seq = navSeq;
   const canEmail = emailConfigured();
   view.innerHTML = `<div class="card panel"><h3>Pending invites & password resets</h3>
     <p style="color:var(--muted);font-size:14px">Forgot-password requests from employees appear here. ${canEmail ? "Invite emails go out automatically — use Email to send one again." : "Copy the link and send it to them."}</p>
     <div id="inv-out">${skeletonList(2)}</div></div>`;
   const reloadInv = async () => {
     const all = await repo.list("invites", { orderBy: [["createdAt", "desc"]], limit: 100 });
+    if (seq !== navSeq) return;
     const open = all.filter((i) => !i.used);
     qs("#inv-out").innerHTML = open.length ? open.map((i) => `<div class="doc-row">
         <span style="flex:1;min-width:0"><b class="ow">${esc(i.email || "")}</b><br>
@@ -557,8 +591,10 @@ async function vInvites() {
 }
 
 async function vUsers() {
+  const seq = navSeq;
   view.innerHTML = `<div class="card panel"><h3>Users & roles (sys_admin)</h3><div id="u-out">${skeletonList(3)}</div></div>`;
   const rows = await listEmployees();
+  if (seq !== navSeq) return;
   qs("#u-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows.map((e) => `<tr><td data-th="Name" class="ow">${esc(e.name || "")}</td><td data-th="Email" class="ow">${esc(e.email || "")}</td>
       <td data-th="Role"><select class="field" data-role="${esc(e.id)}" style="max-width:180px">${["employee", "supervisor", "hr_staff", "hr_admin", "final_approver", "sys_admin"].map((r) => `<option ${e.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td>
@@ -575,11 +611,13 @@ async function vUsers() {
 }
 
 async function vSettings() {
+  const seq = navSeq;
   view.innerHTML = `<div class="card panel"><h3>Settings</h3><div id="s-out">${skeletonList(3)}</div></div>
     <div class="card panel"><h3>Reference data</h3>
       <p style="color:var(--muted);font-size:14px">Re-seeds leave types, holidays, settings and departments without touching accounts or applications.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost" id="seed-ref">Seed reference data</button></div></div>`;
   const s = await getSettings();
+  if (seq !== navSeq) return;
   qs("#s-out").innerHTML = `<div class="form-grid">
     <div><label class="sec-label">Organization</label><input class="field ow" id="s-org" value="${esc(s.orgName || "")}"></div>
     <div><label class="sec-label">Office</label><input class="field ow" id="s-office" value="${esc(s.office || "")}"></div>
