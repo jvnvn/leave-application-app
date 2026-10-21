@@ -43,7 +43,7 @@
 - Consumes: nothing.
 - Produces: public paths `downloads/Aurora-Leave.apk` (binary, 989228 bytes) and `img/qr-android.svg` (QR decoding to `https://jvnvn.github.io/leave-application-app/downloads/Aurora-Leave.apk`). Task 2 references both paths.
 
-- [ ] **Step 1: Verify the source APK is the signed build**
+- [x] **Step 1: Verify the source APK is the signed build**
 
 Run:
 
@@ -62,7 +62,7 @@ sha256: 5886920076F1966B0FE74A12814A203D3E6296D89C617432D595359D96E8F192
 
 If either value differs, STOP. Do not publish an unexpected binary.
 
-- [ ] **Step 2: Back up the signing material outside the repo**
+- [x] **Step 2: Back up the signing material outside the repo**
 
 Run:
 
@@ -75,7 +75,7 @@ Get-ChildItem "D:\tyron\Pictures\mint\aurora-leave-signing" | Select-Object Name
 
 Expected: `android.keystore` and `twa-manifest.json` listed. This directory is outside the repo — nothing to commit.
 
-- [ ] **Step 3: Copy the APK into the site at its stable path**
+- [x] **Step 3: Copy the APK into the site at its stable path**
 
 Run (from the repo root):
 
@@ -87,7 +87,7 @@ Copy-Item $src downloads\Aurora-Leave.apk
 
 Expected: the same SHA-256 as Step 1.
 
-- [ ] **Step 4: Generate the QR SVG**
+- [x] **Step 4: Generate the QR SVG**
 
 Run (from the repo root):
 
@@ -97,7 +97,7 @@ npx --yes qrcode -t svg -o img\qr-android.svg "https://jvnvn.github.io/leave-app
 
 Expected: `saved qrcode to: D:\tyron\Pictures\mint\leave application app\img\qr-android.svg`; the file is roughly 2.5 KB.
 
-- [ ] **Step 5: Write the throwaway QR decoder check**
+- [x] **Step 5: Write the throwaway QR decoder check**
 
 Write `C:\Users\tyron\AppData\Local\Temp\opencode\pwtest\verify-qr.mjs`:
 
@@ -150,7 +150,7 @@ if (result.data !== expected) {
 console.log("PASS: QR decodes to " + result.data);
 ```
 
-- [ ] **Step 6: Run the decoder check**
+- [x] **Step 6: Run the decoder check**
 
 Run:
 
@@ -164,7 +164,7 @@ Expected: `PASS: QR decodes to https://jvnvn.github.io/leave-application-app/dow
 
 If it fails, delete `img\qr-android.svg`, re-run Step 4 with the URL typed exactly as shown, and re-run this step.
 
-- [ ] **Step 7: Commit the APK and QR asset**
+- [x] **Step 7: Commit the APK and QR asset**
 
 Run (from the repo root):
 
@@ -187,7 +187,7 @@ Expected: `2 files changed`; `git status --short` is clean.
 - Consumes: `downloads/Aurora-Leave.apk`, `img/qr-android.svg` (Task 1); `css/tokens.css`, `css/base.css`, `css/employee.css`.
 - Produces: page at `/download.html` whose anchor `a[href="downloads/Aurora-Leave.apk"]` carries the `download` attribute; Task 3 links to `download.html`.
 
-- [ ] **Step 1: Write `download.html`**
+- [x] **Step 1: Write `download.html`**
 
 Create `download.html` with exactly:
 
@@ -253,7 +253,7 @@ Create `download.html` with exactly:
 </html>
 ```
 
-- [ ] **Step 2: Write the throwaway static server**
+- [x] **Step 2: Write the throwaway static server**
 
 Write `C:\Users\tyron\AppData\Local\Temp\opencode\pwtest\mint-serve.mjs`:
 
@@ -292,7 +292,7 @@ http
   .listen(8099, "127.0.0.1", () => console.log("serving on http://127.0.0.1:8099"));
 ```
 
-- [ ] **Step 3: Start the server**
+- [x] **Step 3: Start the server**
 
 Run:
 
@@ -305,7 +305,7 @@ curl.exe -s -o NUL -w "%{http_code}" http://127.0.0.1:8099/download.html
 
 Expected: `200`.
 
-- [ ] **Step 4: Verify the page serves and the APK is reachable with the right size**
+- [x] **Step 4: Verify the page serves and the APK is reachable with the right size**
 
 Run:
 
@@ -317,7 +317,7 @@ curl.exe -sI http://127.0.0.1:8099/img/qr-android.svg
 
 Expected: `HTTP/1.1 200 OK` for all three; the APK response shows `Content-Length: 989228` and `Content-Type: application/vnd.android.package-archive`; the SVG shows `Content-Type: image/svg+xml`.
 
-- [ ] **Step 5: Verify page structure and rendering in a real browser**
+- [x] **Step 5: Verify page structure and rendering in a real browser**
 
 Write `C:\Users\tyron\AppData\Local\Temp\opencode\pwtest\check-download.mjs`:
 
@@ -386,11 +386,11 @@ horizontal overflow: false
 PASS: download page renders correctly
 ```
 
-- [ ] **Step 6: Visually inspect both screenshots**
+- [x] **Step 6: Visually inspect both screenshots**
 
 Open `download-mobile.png` and `download-desktop.png` from `C:\Users\tyron\AppData\Local\Temp\opencode\pwtest\` and confirm: QR is centred with white quiet zone, the download button is full width, the meta line reads `Version 1.0.0 · 966 KB · Android 7.0+ · Signed`, install steps are numbered 1-3, and no text is clipped at 390 px wide.
 
-- [ ] **Step 7: Commit the install page**
+- [x] **Step 7: Commit the install page**
 
 Run (from the repo root):
 
@@ -415,7 +415,7 @@ Expected: `1 file changed`; `git status --short` is clean.
 - Consumes: `download.html` (Task 2).
 - Produces: anchor `a[href="download.html"]` present on `login.html`; `.install-strip-link` anchor with `href="download.html"` rendered inside `.install-strip` only when `mode === "install"`.
 
-- [ ] **Step 1: Add the login link**
+- [x] **Step 1: Add the login link**
 
 In `login.html`, replace line 33:
 
@@ -430,7 +430,7 @@ with:
     <p style="text-align:center;margin:0"><a class="btn btn-ghost btn-sm" href="download.html">Get the Android app</a></p>
 ```
 
-- [ ] **Step 2: Add the strip link markup**
+- [x] **Step 2: Add the strip link markup**
 
 In `js/pwa.js`, replace the `strip.innerHTML` assignment (lines 55-59):
 
@@ -453,7 +453,7 @@ with:
   `;
 ```
 
-- [ ] **Step 3: Style the strip link**
+- [x] **Step 3: Style the strip link**
 
 In `css/employee.css`, immediately after the `.install-strip-x` block:
 
@@ -473,7 +473,7 @@ insert:
 }
 ```
 
-- [ ] **Step 4: Syntax-check the modified module**
+- [x] **Step 4: Syntax-check the modified module**
 
 Run:
 
@@ -483,7 +483,7 @@ node --check js/pwa.js
 
 Expected: no output, exit code 0.
 
-- [ ] **Step 5: Create the throwaway strip test page**
+- [x] **Step 5: Create the throwaway strip test page**
 
 Create `.strip-test.html` in the repo root (delete it in Step 8; never stage it):
 
@@ -498,7 +498,7 @@ Create `.strip-test.html` in the repo root (delete it in Step 8; never stage it)
 </html>
 ```
 
-- [ ] **Step 6: Verify both entry points in a browser**
+- [x] **Step 6: Verify both entry points in a browser**
 
 Write `C:\Users\tyron\AppData\Local\Temp\opencode\pwtest\check-links.mjs`:
 
@@ -546,7 +546,7 @@ node check-links.mjs
 
 Expected: `PASS: login link visible -> Get the Android app`, `PASS: strip link visible -> download.html`, `PASS: both entry points verified`.
 
-- [ ] **Step 7: Confirm the iOS strip has no APK link**
+- [x] **Step 7: Confirm the iOS strip has no APK link**
 
 Run:
 
@@ -557,7 +557,7 @@ node -e "const s = require('fs').readFileSync('D:/tyron/Pictures/mint/leave appl
 
 Expected: `PASS: link gated to install mode`. (The iOS path calls `mountStrip("ios")`, so the gated string is omitted there.)
 
-- [ ] **Step 8: Delete the throwaway page and confirm the tree is clean of it**
+- [x] **Step 8: Delete the throwaway page and confirm the tree is clean of it**
 
 Run:
 
@@ -568,7 +568,7 @@ git status --short
 
 Expected: `.strip-test.html` removed; no untracked test file listed.
 
-- [ ] **Step 9: Commit the entry points**
+- [x] **Step 9: Commit the entry points**
 
 Run (from the repo root):
 
@@ -589,7 +589,7 @@ Expected: `3 files changed`; `git status --short` is clean.
 - Consumes: the three commits from Tasks 1-3.
 - Produces: live `download.html`, live APK at `downloads/Aurora-Leave.apk` with matching SHA-256.
 
-- [ ] **Step 1: Confirm the push target**
+- [x] **Step 1: Confirm the push target**
 
 Run:
 
@@ -600,7 +600,7 @@ git log --oneline -4
 
 Expected: `frontend-only` is tracked against `jvnvn/main` and ahead by 3 commits (`feat: host signed android apk...`, `feat: add android install page...`, `feat: link android install page...`), on top of `489e375`.
 
-- [ ] **Step 2: Push to the Pages branch**
+- [x] **Step 2: Push to the Pages branch**
 
 Run:
 
@@ -610,7 +610,7 @@ $env:GIT_MASTER='1'; git push jvnvn frontend-only:main
 
 Expected: the three commits pushed; the branch reports up to date with `jvnvn/main`.
 
-- [ ] **Step 3: Wait for the Pages build and check the page**
+- [x] **Step 3: Wait for the Pages build and check the page**
 
 Run (repeat up to 10 times, one minute apart, until 200):
 
@@ -620,7 +620,7 @@ curl.exe -s -o NUL -w "%{http_code}`n" https://jvnvn.github.io/leave-application
 
 Expected: `200`. Pages builds usually finish in 1-2 minutes; the CDN can lag up to about 10 minutes.
 
-- [ ] **Step 4: Verify the live APK is byte-identical**
+- [x] **Step 4: Verify the live APK is byte-identical**
 
 Run:
 
@@ -639,7 +639,7 @@ sha256: 5886920076F1966B0FE74A12814A203D3E6296D89C617432D595359D96E8F192
 
 If the hash differs, the CDN served a stale or corrupted file — re-run after the cache window, and confirm `git show HEAD:downloads/Aurora-Leave.apk` hashes to the same value locally.
 
-- [ ] **Step 5: Verify the live QR asset and page wiring**
+- [x] **Step 5: Verify the live QR asset and page wiring**
 
 Run:
 
@@ -649,7 +649,7 @@ curl.exe -sI https://jvnvn.github.io/leave-application-app/img/qr-android.svg
 
 Expected: `HTTP/2 200` (or `HTTP/1.1 200`) with `content-type: image/svg+xml`.
 
-- [ ] **Step 6: Manual phone check (user)**
+- [x] **Step 6: Manual phone check (user)**
 
 On an Android phone: scan the QR from the live page, confirm the APK downloads, open it, allow installs from Chrome if prompted, install, and sign in. Report back if the install prompt or login fails.
 
@@ -670,3 +670,26 @@ On an Android phone: scan the QR from the live page, confirm the APK downloads, 
 **Placeholder scan:** no TBD/TODO; every code step carries the literal content; every check states expected output.
 
 **Type consistency:** `download.html` and the two links use the same relative href `download.html` / `downloads/Aurora-Leave.apk`; the QR target matches the deployed Pages path exactly (`https://jvnvn.github.io/leave-application-app/downloads/Aurora-Leave.apk`); `mountStrip("install")` is the only mode that renders `.install-strip-link`.
+
+---
+
+## Execution Record
+
+Executed inline on 2026-10-21 on branch `frontend-only`, directly in the deploy checkout (clean tree at start; no worktree because the plan's absolute paths target this checkout).
+
+| Task | Commit | Result |
+|---|---|---|
+| 1. Host APK + QR | `170e11f` | APK 989228 B, SHA-256 `58869200…F192`; QR decoded to the live APK URL |
+| 2. Install page | `09332ae` | Local 200; APK Content-Length 989228; 3 steps; no overflow at 390 px |
+| 3. Entry links | `0f938aa` | Login link visible; strip link renders only in install mode; no overflow |
+| 4. Deploy + verify | push `5266891..0f938aa` | Live page 200; live APK 989228 B with matching SHA-256; live QR decodes; 0 console errors |
+
+Verification evidence:
+
+- `node --check js/pwa.js` — exit 0.
+- Local static server: `download.html` 200; APK 200 (`application/vnd.android.package-archive`, 989228); SVG 200 (`image/svg+xml`, 2546).
+- Playwright at 390×844 and 1280×900: QR rendered 240×240, button carries `download`, 3 install steps, no horizontal overflow; screenshots inspected.
+- Live Playwright: title correct, QR rendered, 3 steps, no overflow, 0 console errors, 0 failed requests.
+- Live APK download: 989228 B, SHA-256 `5886920076F1966B0FE74A12814A203D3E6296D89C617432D595359D96E8F192`. The first fetch was truncated (359121 B) by a flaky CDN edge; an immediate HTTP/1.1 retry returned the complete file, so the artifact is correct and the CDN edge was transient.
+
+Remaining manual step: install from the QR on an Android phone and sign in (Task 4, Step 6).
