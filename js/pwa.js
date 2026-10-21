@@ -54,6 +54,7 @@ function mountStrip(mode) {
   strip.setAttribute("aria-label", "Install app");
   strip.innerHTML = `
     <span class="install-strip-text">Install Aurora Leave for quick access</span>
+    ${mode === "install" ? '<a class="install-strip-link" href="download.html">Get APK</a>' : ""}
     <button class="install-strip-btn" type="button">${mode === "ios" ? "Show me how" : "Install"}</button>
     <button class="install-strip-x" type="button" aria-label="Dismiss">✕</button>
   `;

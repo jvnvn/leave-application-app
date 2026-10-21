@@ -131,5 +131,9 @@ button.cal-day { color: inherit; padding: 0; cursor: pointer; min-height: 44px; 
   flex: none; border: 0; background: transparent; color: var(--muted);
   font-size: var(--fs-base); line-height: 1; padding: 6px 8px; cursor: pointer;
 }
+.install-strip-link {
+  flex: none; color: var(--indigo); font-size: var(--fs-sm);
+  font-weight: 700; text-decoration: none; padding: 6px 2px;
+}
 .install-steps { margin: 0 0 16px; padding-left: 20px; font-size: var(--fs-base); color: var(--ink-2); }
 .install-steps li { margin-bottom: 6px; }
