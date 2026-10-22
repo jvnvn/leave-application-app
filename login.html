@@ -5,8 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sign in — Leave Management System</title>
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch.png">
 <meta name="theme-color" content="#0F172A">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Aurora Leave">
@@ -22,7 +24,7 @@
   <p class="sec-label">Leave Management System</p>
   <h1 style="margin:0 0 20px">Sign in</h1>
   <div class="card" style="padding:20px">
-    <div id="login-error" class="state-box" style="display:none;color:var(--danger);padding:0 0 12px"></div>
+    <div id="login-error" class="state-box" role="alert" aria-live="assertive" style="display:none;color:var(--danger);padding:0 0 12px"></div>
     <form id="login-form">
       <label class="sec-label" for="email">Email</label>
       <input class="field ow" id="email" type="email" autocomplete="username" required style="margin-bottom:12px">

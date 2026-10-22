@@ -42,9 +42,34 @@ function toPublicUser(u) {
   return rest;
 }
 
+function signInErrorMessage(err) {
+  switch (err && err.code) {
+    case "auth/invalid-credential":
+    case "auth/invalid-login-credentials":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "Incorrect email or password.";
+    case "auth/invalid-email":
+      return "Enter a valid email address.";
+    case "auth/too-many-requests":
+      return "Too many sign-in attempts. Try again later or reset your password.";
+    case "auth/network-request-failed":
+      return "Network error. Check your connection and try again.";
+    case "auth/user-disabled":
+      return "This account has been disabled.";
+    default:
+      return (err && err.message) || "Sign in failed.";
+  }
+}
+
 export async function signIn(email, password) {
   const { auth, mod } = await firebaseAuth();
-  const cred = await mod.signInWithEmailAndPassword(auth, email, password);
+  let cred;
+  try {
+    cred = await mod.signInWithEmailAndPassword(auth, email, password);
+  } catch (err) {
+    throw new Error(signInErrorMessage(err));
+  }
   const profile = await repo.get("users", cred.user.uid);
   if (!profile) {
     await mod.signOut(auth);
