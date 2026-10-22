@@ -16,7 +16,7 @@ import { holidayDates, listHolidays } from "../services/holidays.js";
 import { myNotifications, markRead, markAllRead, subscribeMyNotifications } from "../services/notifications.js";
 import { getSettings } from "../services/settings.js";
 import { upload, getUrl, storagePath } from "../services/files.js";
-import { balanceCard, requestCard, skeletonList, emptyState, errorState, openSheet, openModal, closeOverlays, avatarHtml, timelineHtml, statusPill } from "../ui/components.js";
+import { balanceCard, requestCard, skeletonList, emptyState, errorState, openSheet, openModal, closeOverlays, avatarHtml, timelineHtml, statusPill, xIcon } from "../ui/components.js";
 import { initLayoutDebug } from "../ui/layout-debug.js";
 import * as draftStore from "../data/draft.js";
 
@@ -178,7 +178,7 @@ async function openDetail(id) {
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <h3 class="ow" style="margin:0;flex:1">${esc(d.leaveTypeName || d.leaveTypeCode || "Leave")}</h3>
       ${statusPill(d.status)}
-      <button class="icon-btn" data-close aria-label="Close">✕</button>
+      <button class="icon-btn" data-close aria-label="Close">${xIcon()}</button>
     </div>
     <dl class="kv" style="margin-top:12px">
       <dt>Dates</dt><dd>${esc(d.startDate || "")} → ${esc(d.endDate || "")}</dd>
@@ -312,7 +312,7 @@ function renderWizard() {
       <input type="file" id="doc-input" aria-label="Supporting documents" accept=".pdf,.jpg,.jpeg,.png" style="width:100%">
       <p id="doc-err" style="display:none;color:var(--danger);font-size:13px"></p>
       <p id="doc-busy" style="display:none;color:var(--indigo);font-size:13px">Uploading…</p>
-      ${(state.documents || []).map((d, i) => `<div class="doc-row"><span class="ow" style="flex:1">${esc(d.fileName)}</span><button class="icon-btn danger" data-rmdoc="${i}" aria-label="Remove">✕</button></div>`).join("")}
+      ${(state.documents || []).map((d, i) => `<div class="doc-row"><span class="ow" style="flex:1">${esc(d.fileName)}</span><button class="icon-btn danger" data-rmdoc="${i}" aria-label="Remove">${xIcon()}</button></div>`).join("")}
     </div></div>
     <div class="emp-sec"><p class="sec-label">6. Review</p>
       <div id="review-box">${reviewHtml({ valid, lt, errs, days })}</div>
@@ -464,7 +464,7 @@ async function renderCalendar() {
     const mine = leaveByDate.get(iso) || [];
     const hol = holSet.get(iso);
     openSheet(`
-      <div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;flex:1">${esc(iso)}</h3><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+      <div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;flex:1">${esc(iso)}</h3><button class="icon-btn" data-close aria-label="Close">${xIcon()}</button></div>
       ${hol ? `<p style="color:var(--muted)">🎉 ${esc(hol)} (holiday)</p>` : ""}
       ${mine.length ? mine.map((a) => `<div class="doc-row">
         <span style="flex:1;min-width:0"><b class="ow">${esc(a.leaveTypeName || a.leaveTypeCode || "")}</b><br>

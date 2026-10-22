@@ -58,8 +58,6 @@
 .req-dates { color: var(--muted); font-size: var(--fs-sm); margin-top: 4px; }
 .req-reason { font-style: italic; color: var(--ink-2); margin-top: 6px; font-size: var(--fs-sm); }
 .req-actions { margin-left: auto; display: flex; gap: 4px; }
-.icon-btn { border: 0; background: transparent; cursor: pointer; min-width: 44px; min-height: 44px; border-radius: 12px; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; }
-.icon-btn.danger { color: var(--danger); }
 
 /* FAB + bottom nav */
 .fab {

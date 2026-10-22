@@ -19,7 +19,7 @@ import { getSettings, saveSettings } from "../services/settings.js";
 import { emailConfigured, sendInviteEmail } from "../services/email.js";
 import { summary } from "../services/reports.js";
 import { getUrl } from "../services/files.js";
-import { skeletonList, emptyState, errorState, openModal, openSheet, closeOverlays, statusPill, timelineHtml } from "../ui/components.js";
+import { skeletonList, emptyState, errorState, openModal, openSheet, closeOverlays, statusPill, timelineHtml, xIcon } from "../ui/components.js";
 import { initLayoutDebug } from "../ui/layout-debug.js";
 import { repo } from "../data/repository.js";
 
@@ -453,7 +453,7 @@ async function vCal() {
       const list = byDate.get(iso) || [];
       const hol = holSet.get(iso);
       openSheet(`
-        <div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;flex:1">On leave — ${esc(iso)}</h3><button class="icon-btn" data-close aria-label="Close">✕</button></div>
+        <div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;flex:1">On leave — ${esc(iso)}</h3><button class="icon-btn" data-close aria-label="Close">${xIcon()}</button></div>
         ${hol ? `<p style="color:var(--muted)">🎉 ${esc(hol)} (holiday)</p>` : ""}
         ${list.length ? list.map((a) => `<div class="doc-row">
           <span style="flex:1;min-width:0"><b class="ow">${esc(a.employeeName || "")}</b><br>
@@ -516,7 +516,7 @@ async function vHols() {
     const rows = await listHolidays();
     if (seq !== navSeq) return;
     qs("#h-out").innerHTML = rows.map((h) => `<div class="doc-row"><span><b>${esc(h.date || h.id)}</b> — <span class="ow">${esc(h.name)}</span> <i>(${esc(h.kind)})</i></span>
-      ${can(user, "holidays.manage") ? `<button class="icon-btn danger" data-del="${esc(h.date || h.id)}" aria-label="Delete">✕</button>` : ""}</div>`).join("") || emptyState("📅", "No holidays");
+      ${can(user, "holidays.manage") ? `<button class="icon-btn danger" data-del="${esc(h.date || h.id)}" aria-label="Delete">${xIcon()}</button>` : ""}</div>`).join("") || emptyState("📅", "No holidays");
     qsa("[data-del]", view).forEach((b) => (b.onclick = async () => { await removeHoliday(b.dataset.del); toast("Deleted", "success"); reload(); }));
   };
   await reload();
@@ -548,7 +548,7 @@ async function vTypes() {
       return `<tr><td data-th="Code">${esc(code)}</td><td data-th="Name" class="ow">${esc(t.name)}</td>
         <td data-th="Active">${t.active ? "yes" : "no"}</td><td data-th="Requires doc">${t.requiresDoc ? "yes" : "no"}</td><td data-th="Max days">${esc(String(t.maxDays || 0))}</td>
         <td>${may ? `<div style="display:flex;gap:6px;justify-content:flex-end"><button class="btn btn-ghost btn-sm" data-edit="${esc(code)}">Edit</button>
-          <button class="icon-btn danger" data-remove="${esc(code)}" data-name="${esc(t.name || code)}" aria-label="Remove ${esc(t.name || code)}">✕</button></div>` : ""}</td></tr>`;
+          <button class="icon-btn danger" data-remove="${esc(code)}" data-name="${esc(t.name || code)}" aria-label="Remove ${esc(t.name || code)}">${xIcon()}</button></div>` : ""}</td></tr>`;
     }).join("") || `<tr><td colspan="6">${emptyState("🗂", "No leave types yet")}</td></tr>`;
     qs("#t-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>Code</th><th>Name</th><th>Active</th><th>Requires doc</th><th>Max days</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
     qsa("[data-edit]", view).forEach((b) => (b.onclick = () => leaveTypeModal(b.dataset.edit, reload)));
@@ -613,7 +613,7 @@ async function vInvites() {
         <button class="btn btn-ghost btn-sm" data-copy="${esc(i.token)}">Copy link</button>
         ${canEmail && i.kind === "invite" ? `<button class="btn btn-ghost btn-sm" data-email="${esc(i.token)}">Email</button>` : ""}
         ${i.kind === "reset" && i.status === "requested" ? `<button class="btn btn-primary btn-sm" data-sent="${esc(i.token)}">Mark sent</button>` : ""}
-        <button class="icon-btn danger" data-revoke="${esc(i.token)}" aria-label="Revoke">✕</button>
+        <button class="icon-btn danger" data-revoke="${esc(i.token)}" aria-label="Revoke">${xIcon()}</button>
       </div>`).join("")
       : `<p style="color:var(--muted)">Nothing pending.</p>`;
     qsa("[data-copy]", view).forEach((b) => (b.onclick = async () => {

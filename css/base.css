@@ -67,6 +67,20 @@ textarea.field { resize: vertical; min-height: 96px; }
 .btn-ghost { background: var(--slate-pill); color: var(--ink-2); }
 .btn-danger { background: var(--sick-tint); color: var(--danger); }
 .btn-sm { min-height: 40px; padding: 8px 16px; font-size: var(--fs-sm); }
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0;
+  border: 0; border-radius: 12px; background: transparent; color: var(--muted);
+  cursor: pointer; line-height: 1;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.icon-btn:hover { background: var(--slate-pill); color: var(--ink-2); }
+.icon-btn:active { background: var(--line); }
+.icon-btn.danger { color: var(--danger); background: var(--sick-tint); }
+.icon-btn.danger:hover,
+.icon-btn.danger:active { color: #fff; background: var(--danger); }
+.icon-btn svg { display: block; pointer-events: none; }
 .btn .spin {
   width: 16px; height: 16px; border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.4); border-top-color: #fff;
