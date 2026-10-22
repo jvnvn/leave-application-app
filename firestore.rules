@@ -19,7 +19,7 @@ service cloud.firestore {
         ? get(/databases/(default)/documents/users/$(myUid())).data.role : null;
     }
     function isHr(role) { return role == 'hr_staff' || role == 'hr_admin' || role == 'sys_admin'; }
-    function isReviewer(role) { return isHr(role) || role == 'supervisor' || role == 'final_approver'; }
+    function isReviewer(role) { return isHr(role) || role == 'supervisor'; }
     function isAdmin() { return myRole() == 'hr_admin' || myRole() == 'sys_admin'; }
     // HR may adjust earned; reviewers may move pending/used for approvals;
     // owners may move their own pending hold (never used or earned).

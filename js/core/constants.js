@@ -6,22 +6,21 @@ export const ROLES = [
   "supervisor",
   "hr_staff",
   "hr_admin",
-  "final_approver",
   "sys_admin",
 ];
 
 export const HR_ROLES = ["hr_staff", "hr_admin", "sys_admin"];
-export const REVIEWER_ROLES = ["hr_staff", "hr_admin", "supervisor", "final_approver", "sys_admin"];
+export const REVIEWER_ROLES = ["hr_staff", "hr_admin", "supervisor", "sys_admin"];
 
 // permission -> roles allowed (sys_admin bypasses all checks in can()).
 export const PERMISSIONS = {
-  "leave.apply": ["employee", "supervisor", "hr_staff", "hr_admin", "final_approver", "sys_admin"],
-  "leave.review": ["supervisor", "hr_staff", "hr_admin", "final_approver", "sys_admin"],
+  "leave.apply": ["employee", "supervisor", "hr_staff", "hr_admin", "sys_admin"],
+  "leave.review": ["supervisor", "hr_staff", "hr_admin", "sys_admin"],
   "leave.forward": ["supervisor", "hr_staff", "hr_admin", "sys_admin"],
-  "balances.view.own": ["employee", "supervisor", "hr_staff", "hr_admin", "final_approver", "sys_admin"],
+  "balances.view.own": ["employee", "supervisor", "hr_staff", "hr_admin", "sys_admin"],
   "balances.view.all": ["hr_staff", "hr_admin", "sys_admin"],
   "balances.adjust": ["hr_staff", "hr_admin", "sys_admin"],
-  "employees.view": ["supervisor", "hr_staff", "hr_admin", "final_approver", "sys_admin"],
+  "employees.view": ["supervisor", "hr_staff", "hr_admin", "sys_admin"],
   "employees.manage": ["supervisor", "hr_staff", "hr_admin", "sys_admin"],
   "accounts.setPassword": ["supervisor", "hr_staff", "hr_admin", "sys_admin"],
   "accounts.delete.request": ["supervisor", "hr_staff", "hr_admin", "sys_admin"],
@@ -31,7 +30,7 @@ export const PERMISSIONS = {
   "holidays.manage": ["hr_admin", "sys_admin"],
   "leaveTypes.manage": ["hr_staff", "hr_admin", "sys_admin"],
   "settings.manage": ["hr_admin", "sys_admin"],
-  "reports.view": ["supervisor", "hr_staff", "hr_admin", "final_approver", "sys_admin"],
+  "reports.view": ["supervisor", "hr_staff", "hr_admin", "sys_admin"],
   "audit.view": ["hr_admin", "sys_admin"],
   "seed.run": ["sys_admin"],
 };

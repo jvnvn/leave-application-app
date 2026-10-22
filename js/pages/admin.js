@@ -5,7 +5,7 @@ import { esc, qs, qsa, debounce } from "../core/dom.js";
 import { csvEscape, downloadTextFile, daysLabel } from "../core/format.js";
 import { todayISO, monthGrid, monthLabel, addMonths } from "../core/dates.js";
 import { toast, installGlobalHandlers } from "../core/toast.js";
-import { can } from "../core/constants.js";
+import { can, ROLES } from "../core/constants.js";
 import { reviewActionsFor, reviewStage } from "../core/rules.js";
 import { signOut, adminSetPassword } from "../services/auth.js";
 import { allApplications, applicationDetail } from "../services/leaves.js";
@@ -315,7 +315,7 @@ async function empModal(id, reload) {
     <div><label class="sec-label">Email</label><input class="field ow" id="e-email" value="${esc(e.email || "")}" ${id ? "disabled" : ""}></div>
     <div><label class="sec-label">Department</label><input class="field ow" id="e-dept" list="dept-list" value="${esc(e.department || "")}"><datalist id="dept-list">${depts.map((d) => `<option value="${esc(d.name)}">`).join("")}</datalist></div>
     <div><label class="sec-label">Position</label><input class="field ow" id="e-pos" value="${esc(e.position || "")}"></div>
-    <div><label class="sec-label">Role${mayRole ? "" : " (sys admin only)"}</label><select class="field" id="e-role" ${mayRole ? "" : "disabled"}>${["employee", "supervisor", "hr_staff", "hr_admin", "final_approver", "sys_admin"].map((r) => `<option ${e.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></div>
+    <div><label class="sec-label">Role${mayRole ? "" : " (sys admin only)"}</label><select class="field" id="e-role" ${mayRole ? "" : "disabled"}>${ROLES.map((r) => `<option ${e.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></div>
     <div><label class="sec-label">Status</label><select class="field" id="e-status">${["active", "inactive"].map((s) => `<option ${e.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></div>
     ${mayPw ? `<div><label class="sec-label">New password (optional, min 8)</label><input class="field" id="e-pw1" type="password" autocomplete="new-password"></div>
     <div><label class="sec-label">Confirm new password</label><input class="field" id="e-pw2" type="password" autocomplete="new-password"></div>` : ""}
@@ -652,7 +652,7 @@ async function vUsers() {
   if (seq !== navSeq) return;
   qs("#u-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
     <tbody>${rows.map((e) => `<tr><td data-th="Name" class="ow">${esc(e.name || "")}</td><td data-th="Email" class="ow">${esc(e.email || "")}</td>
-      <td data-th="Role"><select class="field" data-role="${esc(e.id)}" style="max-width:180px">${["employee", "supervisor", "hr_staff", "hr_admin", "final_approver", "sys_admin"].map((r) => `<option ${e.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td>
+      <td data-th="Role"><select class="field" data-role="${esc(e.id)}" style="max-width:180px">${ROLES.map((r) => `<option ${e.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td>
       <td data-th="Status">${esc(e.status || "")}</td>
       <td><button class="btn btn-ghost btn-sm" data-toggle="${esc(e.id)}" data-st="${esc(e.status || "active")}">${e.status === "active" ? "Deactivate" : "Activate"}</button></td></tr>`).join("")}</tbody></table></div>`;
   qsa("[data-role]", view).forEach((s) => (s.onchange = async () => {

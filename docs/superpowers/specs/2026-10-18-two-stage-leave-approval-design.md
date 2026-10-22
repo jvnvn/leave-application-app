@@ -6,7 +6,7 @@
 
 ## Background and motivation
 
-The codebase already defines the pieces for multi-stage review — statuses `FOR_SUPERVISOR_REVIEW` ("With supervisor") and `FOR_FINAL_APPROVAL` ("Final approval"), the `supervisor` and `final_approver` roles, the `leave.review` permission, staged statuses in the admin review queue, and staged entries in the transition table. None of it is wired:
+The codebase already defines the pieces for multi-stage review — statuses `FOR_SUPERVISOR_REVIEW` ("With supervisor") and `FOR_FINAL_APPROVAL` ("Final approval"), the `supervisor` and HR roles, the `leave.review` permission, staged statuses in the admin review queue, and staged entries in the transition table. None of it is wired:
 
 - `submitApplication` hard-codes status `PENDING` and notifies HR only.
 - Any reviewer sees the same action buttons for every application, and `reviewApplication` only checks status transitions — a supervisor can currently move a pending application straight to `APPROVED`, and HR can act without a supervisor ever seeing it.
@@ -26,7 +26,7 @@ The organization requires: employee submits → **supervisor approves first** �
 | Cancellation | Owner may cancel while the application is undecided (DRAFT, PENDING, UNDER_REVIEW, FOR_SUPERVISOR_REVIEW, FOR_FINAL_APPROVAL); held balance released. This also fixes a latent bug: `firestore.rules` required a reviewer role for any application update, so employee self-cancel was previously denied by the server |
 | Legacy applications | Rows already in PENDING/UNDER_REVIEW are handled by HR directly (grandfathered) |
 | Settings workflow dropdowns | Left as-is — `workflowFor()` is dead code that was never wired; out of scope |
-| `final_approver` role | Remains unused; out of scope |
+| `final_approver` role | Removed 2026-10-22; only supervisor and HR approve |
 
 ## Flow
 

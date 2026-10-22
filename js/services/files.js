@@ -3,6 +3,7 @@
 import { getSettings } from "./settings.js";
 import { repo } from "../data/repository.js";
 import { currentUser } from "./auth.js";
+import { REVIEWER_ROLES } from "../core/constants.js";
 
 const ACCEPT = ["application/pdf", "image/jpeg", "image/png", "image/jpg"];
 const FIRESTORE_MAX_BYTES = 700 * 1024;
@@ -43,7 +44,7 @@ export async function upload(file, path) {
 async function blobRows(path) {
   // Owners filter by their own uid (list rules); reviewers read anything.
   const me = currentUser() || {};
-  const elevated = ["hr_staff", "hr_admin", "supervisor", "final_approver", "sys_admin"].includes(me.role);
+  const elevated = REVIEWER_ROLES.includes(me.role);
   const where = [["path", "==", path]];
   if (!elevated && me.uid) where.push(["uid", "==", me.uid]);
   return repo.list("fileBlobs", { where, limit: 10 });
