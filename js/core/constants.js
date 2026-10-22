@@ -29,7 +29,7 @@ export const PERMISSIONS = {
   "users.manage": ["sys_admin"],
   "invites.manage": ["hr_staff", "hr_admin", "sys_admin"],
   "holidays.manage": ["hr_admin", "sys_admin"],
-  "leaveTypes.manage": ["hr_admin", "sys_admin"],
+  "leaveTypes.manage": ["hr_staff", "hr_admin", "sys_admin"],
   "settings.manage": ["hr_admin", "sys_admin"],
   "reports.view": ["supervisor", "hr_staff", "hr_admin", "final_approver", "sys_admin"],
   "audit.view": ["hr_admin", "sys_admin"],

@@ -9,11 +9,11 @@ import { can } from "../core/constants.js";
 import { reviewActionsFor, reviewStage } from "../core/rules.js";
 import { signOut, adminSetPassword } from "../services/auth.js";
 import { allApplications, applicationDetail } from "../services/leaves.js";
-import { allBalances, transactions, adjust } from "../services/balances.js";
+import { allBalances, allTransactions, transactions, adjust } from "../services/balances.js";
 import { review, pendingQueue } from "../services/approvals.js";
 import { listEmployees, getEmployee, saveEmployee, setStatus, listDepartments, inviteEmployee, inviteLink } from "../services/employees.js";
 import { listHolidays, saveHoliday, removeHoliday } from "../services/holidays.js";
-import { listLeaveTypes, saveLeaveType } from "../services/leaveTypes.js";
+import { listLeaveTypes, saveLeaveType, createLeaveType, removeLeaveType } from "../services/leaveTypes.js";
 import { listAudit } from "../services/audit.js";
 import { getSettings, saveSettings } from "../services/settings.js";
 import { emailConfigured, sendInviteEmail } from "../services/email.js";
@@ -109,11 +109,12 @@ const thisMonth = todayISO().slice(0, 7);
 async function vDash() {
   const seq = navSeq;
   view.innerHTML = `<div class="stat-grid">${"<div class='skeleton' style='height:100px'></div>".repeat(4)}</div>${skeletonList(3)}`;
-  const [pending, apps, emps] = await Promise.all([pendingQueue(), allApplications({ limit: 10 }), listEmployees()]);
+  const [pending, apps, emps] = await Promise.all([pendingQueue(), allApplications({ limit: 1000 }), listEmployees()]);
   if (seq !== navSeq) return;
   const approvedMonth = apps.filter((a) => a.status === "APPROVED" && (a.startDate || "").slice(0, 7) === thisMonth).length;
   const today = todayISO();
   const onLeave = apps.filter((a) => a.status === "APPROVED" && a.startDate <= today && a.endDate >= today).length;
+  const recentApps = apps.slice(0, 10);
   view.innerHTML = `
     <div class="stat-grid">
       <div class="card stat-card"><div class="stat-num">${pending.length}</div><div class="stat-lbl">Pending review</div></div>
@@ -123,7 +124,7 @@ async function vDash() {
     </div>
     <div class="card panel"><h3>Recent applications</h3>
       <div class="table-scroll"><table class="data stackable"><thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Status</th><th></th></tr></thead>
-      <tbody>${apps.map((a) => `<tr><td data-th="Employee" class="ow">${esc(a.employeeName || "")}</td><td data-th="Type">${esc(a.leaveTypeName || "")}</td>
+      <tbody>${recentApps.map((a) => `<tr><td data-th="Employee" class="ow">${esc(a.employeeName || "")}</td><td data-th="Type">${esc(a.leaveTypeName || "")}</td>
         <td data-th="Dates">${esc(a.startDate || "")} → ${esc(a.endDate || "")}</td><td data-th="Status">${statusPill(a.status)}</td>
         <td><button class="btn btn-ghost btn-sm" data-open="${esc(a.id)}">Open</button></td></tr>`).join("") || `<tr><td>No applications</td></tr>`}</tbody></table></div>
     </div>`;
@@ -376,7 +377,7 @@ async function empModal(id, reload) {
 async function vBals(uidFilter) {
   const seq = navSeq;
   view.innerHTML = `<div class="card panel"><h3>Leave balances</h3><div id="bals-out">${skeletonList(3)}</div></div>
-    <div class="card panel"><h3>Transaction history</h3><div id="tx-out">${skeletonList(2)}</div></div>`;
+    <div class="card panel"><div id="tx-head"><h3>Transaction history</h3></div><div id="tx-out">${skeletonList(2)}</div></div>`;
   const bals = await allBalances();
   const emps = await listEmployees();
   if (seq !== navSeq) return;
@@ -402,11 +403,20 @@ async function vBals(uidFilter) {
       } catch (err) { toast(err.message, "error"); }
     };
   }));
-  const tx = await transactions(uidFilter || bals[0]?.uid || "", undefined, 100).catch(() => []);
-  if (seq !== navSeq) return;
-  qs("#tx-out").innerHTML = tx.length ? `<div class="table-scroll"><table class="data"><thead><tr><th>When</th><th>Type</th><th>Days</th><th>Kind</th><th>Reason</th></tr></thead>
-    <tbody>${tx.map((t) => `<tr><td>${esc((t.createdAt || "").slice(0, 16))}</td><td>${esc(t.leaveTypeCode)}</td><td>${esc(String(t.days))}</td><td>${esc(t.type)}</td><td class="ow">${esc(t.reason || "")}</td></tr>`).join("")}</tbody></table></div>`
-    : `<p style="color:var(--muted)">No transactions.</p>`;
+  const txUids = [...new Set(bals.map((b) => b.uid))].sort((a, b) => (names.get(a) || a).localeCompare(names.get(b) || b));
+  qs("#tx-head").innerHTML = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="margin:0;flex:1">Transaction history</h3>
+    <select class="field" id="tx-uid" aria-label="Employee for transaction history" style="max-width:260px"><option value="">All employees</option>
+      ${txUids.map((uid) => `<option value="${esc(uid)}" ${uid === uidFilter ? "selected" : ""}>${esc(names.get(uid) || uid)}</option>`).join("")}</select></div>`;
+  const loadTx = async (uid) => {
+    qs("#tx-out").innerHTML = skeletonList(2);
+    const tx = await (uid ? transactions(uid, undefined, 100) : allTransactions(100)).catch(() => []);
+    if (seq !== navSeq) return;
+    qs("#tx-out").innerHTML = tx.length ? `<div class="table-scroll"><table class="data"><thead><tr><th>When</th><th>Type</th><th>Days</th><th>Kind</th><th>Reason</th></tr></thead>
+      <tbody>${tx.map((t) => `<tr><td>${esc((t.createdAt || "").slice(0, 16))}</td><td>${esc(t.leaveTypeCode)}</td><td>${esc(String(t.days))}</td><td>${esc(t.type)}</td><td class="ow">${esc(t.reason || "")}</td></tr>`).join("")}</tbody></table></div>`
+      : `<p style="color:var(--muted)">No transactions.</p>`;
+  };
+  qs("#tx-uid").onchange = () => loadTx(qs("#tx-uid").value);
+  await loadTx(uidFilter || "");
 }
 
 async function vCal() {
@@ -422,7 +432,7 @@ async function vCal() {
     const holSet = new Map(hols.map((h) => [h.date || h.id, h.name]));
     const byDate = new Map();
     for (const a of apps) {
-      if (!["APPROVED", "PENDING", "UNDER_REVIEW"].includes(a.status)) continue;
+      if (!["APPROVED", "PENDING", "UNDER_REVIEW", "FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL"].includes(a.status)) continue;
       let cur = a.startDate, g = 0;
       while (cur && cur <= a.endDate && g++ < 370) {
         if (!byDate.has(cur)) byDate.set(cur, []);
@@ -527,27 +537,64 @@ async function vHols() {
 
 async function vTypes() {
   const seq = navSeq;
-  view.innerHTML = `<div class="card panel"><h3>Leave types</h3><div id="t-out">${skeletonList(3)}</div></div>`;
-  const rows = await listLeaveTypes(true);
-  if (seq !== navSeq) return;
-  qs("#t-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>Code</th><th>Name</th><th>Active</th><th>Requires doc</th><th>Max days</th><th></th></tr></thead>
-    <tbody>${rows.map((t) => { const code = t.code || t.id; return `<tr><td data-th="Code">${esc(code)}</td><td data-th="Name" class="ow">${esc(t.name)}</td>
-      <td data-th="Active">${t.active ? "yes" : "no"}</td><td data-th="Requires doc">${t.requiresDoc ? "yes" : "no"}</td><td data-th="Max days">${esc(String(t.maxDays || 0))}</td>
-      <td>${can(user, "leaveTypes.manage") ? `<button class="btn btn-ghost btn-sm" data-edit="${esc(code)}">Edit</button>` : ""}</td></tr>`; }).join("")}</tbody></table></div>`;
-  qsa("[data-edit]", view).forEach((b) => (b.onclick = async () => {
-    const t = await repo.get("leaveTypes", b.dataset.edit);
-    openModal(`<h3>Edit ${esc(b.dataset.edit)}</h3><label class="sec-label">Name</label><input class="field ow" id="t-n" value="${esc(t.name || "")}" style="margin-bottom:8px">
-      <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="t-a" ${t.active ? "checked" : ""} style="width:24px;height:24px"> Active</label>
-      <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="t-r" ${t.requiresDoc ? "checked" : ""} style="width:24px;height:24px"> Requires document</label>
-      <label class="sec-label">Max days (0 = unlimited)</label><input class="field" id="t-m" type="number" value="${esc(String(t.maxDays || 0))}">
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="t-go">Save</button></div>`);
-    qs("#t-go").onclick = async () => {
-      try {
-        await saveLeaveType(b.dataset.edit, { name: qs("#t-n").value.trim(), active: qs("#t-a").checked, requiresDoc: qs("#t-r").checked, maxDays: Number(qs("#t-m").value) });
-        closeOverlays(); vTypes(); toast("Saved", "success");
-      } catch (e) { toast(e.message, "error"); }
-    };
-  }));
+  const may = can(user, "leaveTypes.manage");
+  view.innerHTML = `<div class="card panel"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="flex:1;margin:0">Leave types</h3>
+    ${may ? `<button class="btn btn-primary btn-sm" id="add-t">Add leave type</button>` : ""}</div><div id="t-out" style="margin-top:12px">${skeletonList(3)}</div></div>`;
+  const reload = async () => {
+    const rows = await listLeaveTypes(true);
+    if (seq !== navSeq) return;
+    const body = rows.map((t) => {
+      const code = t.code || t.id;
+      return `<tr><td data-th="Code">${esc(code)}</td><td data-th="Name" class="ow">${esc(t.name)}</td>
+        <td data-th="Active">${t.active ? "yes" : "no"}</td><td data-th="Requires doc">${t.requiresDoc ? "yes" : "no"}</td><td data-th="Max days">${esc(String(t.maxDays || 0))}</td>
+        <td>${may ? `<div style="display:flex;gap:6px;justify-content:flex-end"><button class="btn btn-ghost btn-sm" data-edit="${esc(code)}">Edit</button>
+          <button class="icon-btn danger" data-remove="${esc(code)}" data-name="${esc(t.name || code)}" aria-label="Remove ${esc(t.name || code)}">✕</button></div>` : ""}</td></tr>`;
+    }).join("") || `<tr><td colspan="6">${emptyState("🗂", "No leave types yet")}</td></tr>`;
+    qs("#t-out").innerHTML = `<div class="table-scroll"><table class="data stackable"><thead><tr><th>Code</th><th>Name</th><th>Active</th><th>Requires doc</th><th>Max days</th><th></th></tr></thead><tbody>${body}</tbody></table></div>`;
+    qsa("[data-edit]", view).forEach((b) => (b.onclick = () => leaveTypeModal(b.dataset.edit, reload)));
+    qsa("[data-remove]", view).forEach((b) => (b.onclick = () => {
+      const code = b.dataset.remove;
+      openModal(`<h3>Remove leave type</h3><p>Remove <b>${esc(b.dataset.name || code)}</b>?</p>
+        <p style="color:var(--muted);font-size:14px">Only unused types can be removed. If it has applications, employee balances, or transaction history, deactivate it instead.</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-danger" id="t-del">Remove</button></div>`);
+      qs("#t-del").onclick = async () => {
+        try {
+          await removeLeaveType(code, user);
+          closeOverlays();
+          await reload();
+          toast("Leave type removed", "success");
+        } catch (e) { toast(e.message, "error"); }
+      };
+    }));
+  };
+  await reload();
+  const add = qs("#add-t");
+  if (add) add.onclick = () => leaveTypeModal("", reload);
+}
+
+async function leaveTypeModal(code, done) {
+  const editing = !!code;
+  const t = editing ? await repo.get("leaveTypes", code) : { active: true, requiresDoc: false, maxDays: 0, description: "" };
+  if (!t) { toast("Leave type not found", "error"); return; }
+  openModal(`<h3>${editing ? "Edit leave type" : "Add leave type"}</h3>
+    <label class="sec-label">Code</label><input class="field" id="t-code" value="${esc(code || "")}" ${editing ? "disabled" : ""} placeholder="e.g. wellness" maxlength="32" autocomplete="off">
+    <p style="color:var(--muted);font-size:12px;margin:4px 0 8px">Lowercase letters, numbers, underscores. The code cannot be changed later.</p>
+    <label class="sec-label">Name</label><input class="field ow" id="t-n" value="${esc(t.name || "")}" maxlength="80" style="margin-bottom:8px">
+    <label class="sec-label">Description</label><textarea class="field ow" id="t-desc" rows="2" maxlength="500" style="margin-bottom:8px">${esc(t.description || "")}</textarea>
+    <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="t-a" ${t.active ? "checked" : ""} style="width:24px;height:24px"> Active</label>
+    <label style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="t-r" ${t.requiresDoc ? "checked" : ""} style="width:24px;height:24px"> Requires document</label>
+    <label class="sec-label">Max days (0 = unlimited)</label><input class="field" id="t-m" type="number" min="0" step="1" value="${esc(String(t.maxDays || 0))}">
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="t-go">${editing ? "Save" : "Add"}</button></div>`);
+  qs("#t-go").onclick = async () => {
+    try {
+      const payload = { name: qs("#t-n").value.trim(), description: qs("#t-desc").value.trim(), active: qs("#t-a").checked, requiresDoc: qs("#t-r").checked, maxDays: Number(qs("#t-m").value) };
+      if (editing) await saveLeaveType(code, payload, user);
+      else await createLeaveType(qs("#t-code").value, payload, user);
+      closeOverlays();
+      await done();
+      toast(editing ? "Saved" : "Leave type added", "success");
+    } catch (e) { toast(e.message, "error"); }
+  };
 }
 
 async function vInvites() {

@@ -27,6 +27,10 @@ export async function transactions(uid, leaveTypeCode, limit = 100) {
   return repo.list("leaveBalanceTransactions", { where, orderBy: [["createdAt", "desc"]], limit });
 }
 
+export async function allTransactions(limit = 100) {
+  return repo.list("leaveBalanceTransactions", { orderBy: [["createdAt", "desc"]], limit });
+}
+
 export async function allBalances(limit = 500) {
   return repo.list("leaveBalances", { limit });
 }

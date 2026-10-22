@@ -199,7 +199,7 @@ Support configurable leave types including:
 - Unpaid Leave
 - Other
 
-The administrator must be able to enable/disable leave types.
+HR staff, HR administrators, and system administrators must be able to add, edit, enable/disable, and remove unused leave types. A leave type that has applications, employee balances, or transaction history must be deactivated instead of deleted.
 
 Do not hard-code leave types throughout the UI.
 

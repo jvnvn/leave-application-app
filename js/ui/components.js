@@ -60,24 +60,30 @@ export function openSheet(html) {
   document.body.style.overflow = "hidden";
   const sheet = scrim.firstElementChild;
   const prevFocus = document.activeElement;
+  let keyHandler = null;
   const close = () => {
+    document.removeEventListener("keydown", keyHandler);
     scrim.remove();
     document.body.style.overflow = "";
     if (prevFocus && prevFocus.focus) prevFocus.focus();
   };
-  scrim.addEventListener("click", (e) => { if (e.target === scrim) close(); });
-  scrim.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") close();
+  keyHandler = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); return; }
     if (e.key === "Tab") {
       const f = Array.from(sheet.querySelectorAll("button,input,select,textarea,a[href]")).filter((x) => !x.disabled);
       if (!f.length) return;
       const first = f[0], last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      const outside = !sheet.contains(document.activeElement);
+      if (e.shiftKey && (document.activeElement === first || outside)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || outside)) { e.preventDefault(); first.focus(); }
     }
-  });
+  };
+  document.addEventListener("keydown", keyHandler);
+  scrim.addEventListener("click", (e) => { if (e.target === scrim) close(); });
   const cbtn = sheet.querySelector("[data-close]");
   if (cbtn) cbtn.addEventListener("click", close);
+  const firstField = sheet.querySelector("button,input,select,textarea,a[href]");
+  if (firstField) firstField.focus();
   scrim._close = close;
   return close;
 }
@@ -90,20 +96,38 @@ export function openModal(html) {
   document.body.appendChild(wrap);
   document.body.style.overflow = "hidden";
   const prevFocus = document.activeElement;
+  let keyHandler = null;
   const close = () => {
+    document.removeEventListener("keydown", keyHandler);
     wrap.remove();
     document.body.style.overflow = "";
     if (prevFocus && prevFocus.focus) prevFocus.focus();
   };
+  keyHandler = (e) => {
+    if (e.key === "Escape") { e.preventDefault(); close(); return; }
+    if (e.key === "Tab") {
+      const f = Array.from(wrap.querySelectorAll("button,input,select,textarea,a[href]")).filter((x) => !x.disabled);
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      const outside = !wrap.contains(document.activeElement);
+      if (e.shiftKey && (document.activeElement === first || outside)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || outside)) { e.preventDefault(); first.focus(); }
+    }
+  };
+  document.addEventListener("keydown", keyHandler);
   wrap.addEventListener("click", (e) => { if (e.target === wrap) close(); });
-  wrap.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
   wrap.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", close));
+  const firstField = wrap.querySelector("button,input,select,textarea,a[href]");
+  if (firstField) firstField.focus();
   wrap._close = close;
   return close;
 }
 
 export function closeOverlays() {
-  document.querySelectorAll(".scrim,.modal-wrap").forEach((x) => x.remove());
+  document.querySelectorAll(".scrim,.modal-wrap").forEach((x) => {
+    if (typeof x._close === "function") x._close();
+    else x.remove();
+  });
   document.body.style.overflow = "";
 }
 

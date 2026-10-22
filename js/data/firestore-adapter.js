@@ -40,6 +40,7 @@ async function resolveRef(collection, id) {
 
 function toDoc(data) {
   const out = { ...(data || {}) };
+  delete out.id; // document id is authoritative and must never be stored as a field
   for (const k of ["createdAt", "submittedAt", "updatedAt", "timestamp", "uploadedAt", "expiresAt"]) {
     if (typeof out[k] === "string" && out[k]) out[k] = new Date(out[k]);
   }
@@ -48,7 +49,7 @@ function toDoc(data) {
 
 function fromDoc(id, snap) {
   const d = snap.data() || {};
-  const out = { id, ...d };
+  const out = { ...d, id };
   for (const k of ["createdAt", "submittedAt", "updatedAt", "timestamp", "uploadedAt", "expiresAt"]) {
     const v = out[k];
     if (v && typeof v.toDate === "function") out[k] = v.toDate().toISOString();

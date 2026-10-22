@@ -33,6 +33,7 @@ const out = await run(async () => {
   const approvals = await import("/js/services/approvals.js");
   const files = await import("/js/services/files.js");
   const audit = await import("/js/services/audit.js");
+  const leaveTypes = await import("/js/services/leaveTypes.js");
 
   try {
     // 1. Admin sign-in (bootstrapped) + seed reference data.
@@ -46,6 +47,26 @@ const out = await run(async () => {
     const settings = await repo.get("settings", "app");
     t("seed: settings/app", !!settings && settings.charLimit === 500);
 
+    const qaType = `qa_type_${RUN}`;
+    await leaveTypes.createLeaveType(qaType, { name: "QA Leave", active: true, requiresDoc: false, maxDays: 5, description: "temporary" }, admin);
+    const qaCreated = await leaveTypes.getLeaveType(qaType);
+    t("hr can create leave type", !!qaCreated && qaCreated.name === "QA Leave" && qaCreated.code === qaType);
+    let duplicateType = false;
+    try {
+      await leaveTypes.createLeaveType(qaType, { name: "Duplicate", maxDays: 1 }, admin);
+    } catch { duplicateType = true; }
+    t("duplicate leave type code rejected", duplicateType);
+    await leaveTypes.saveLeaveType(qaType, { name: "QA Leave Updated", active: false, requiresDoc: true, maxDays: 7, description: "temporary" }, admin);
+    const qaEdited = await leaveTypes.getLeaveType(qaType);
+    t("leave type update persists", qaEdited.name === "QA Leave Updated" && qaEdited.active === false && qaEdited.maxDays === 7);
+    await repo.create("leaveBalances", { uid: admin.uid, leaveTypeCode: qaType, earned: 1, used: 0, pending: 0 }, `${admin.uid}_${qaType}`);
+    let usedTypeBlocked = false;
+    try { await leaveTypes.removeLeaveType(qaType, admin); } catch { usedTypeBlocked = true; }
+    t("leave type with balances cannot be removed", usedTypeBlocked);
+    await repo.remove("leaveBalances", `${admin.uid}_${qaType}`);
+    await leaveTypes.removeLeaveType(qaType, admin);
+    t("unused leave type removed", (await leaveTypes.getLeaveType(qaType)) === null);
+
     // 2. HR-style invite -> redeem -> login (full Auth account creation).
     const supEmail = `supervisor${RUN}@example.com`;
     const { token } = await repo.inviteUser({ userData: { email: supEmail, name: "Sam Supervisor", role: "supervisor", department: "Engineering", position: "Team Lead" } });
@@ -57,6 +78,7 @@ const out = await run(async () => {
     t("redeem creates Auth user + profile", !!supUid);
     const supProfile = await repo.get("users", supUid);
     t("users/{uid} === auth uid, role kept", !!supProfile && supProfile.role === "supervisor", supProfile && supProfile.role);
+    t("invited profile id is canonical uid", supProfile && supProfile.id === supUid, supProfile && supProfile.id);
     t("invite burned", (await repo.get("invites", token)).used === true);
     t("starter balances seeded", (await repo.list("leaveBalances", { where: [["uid", "==", supUid]] })).length === 3);
     const sup = await auth.signIn(supEmail, "Sup12345");
@@ -104,6 +126,12 @@ const out = await run(async () => {
     await auth.signOut();
     const { uid: hrUid } = await auth.setPasswordWithInvite(hrInv.token, "Hr123456", "Hr123456");
     await auth.signIn(hrEmail, "Hr123456");
+    const hrActs = { uid: hrUid, email: hrEmail, role: "hr_staff" };
+    const hrType = `qa_hr_${RUN}`;
+    await leaveTypes.createLeaveType(hrType, { name: "HR QA Leave", active: true, requiresDoc: false, maxDays: 2 }, hrActs);
+    t("hr_staff can create leave type", (await leaveTypes.getLeaveType(hrType)) !== null);
+    await leaveTypes.removeLeaveType(hrType, hrActs);
+    t("hr_staff can remove unused leave type", (await leaveTypes.getLeaveType(hrType)) === null);
     let hrClientDenied = false;
     try { await approvals.review(appId, "FOR_FINAL_APPROVAL", { uid: hrUid, role: "hr_staff" }, ""); } catch { hrClientDenied = true; }
     t("hr cannot act at supervisor stage (client guard)", hrClientDenied);
@@ -205,6 +233,10 @@ const out = await run(async () => {
     let p4 = false;
     try { await repo.update("leaveApplications", privApp.id, { status: "APPROVED" }); } catch { p4 = true; }
     t("employee cannot approve an application (rules)", p4);
+    const qaEmpType = `qa_emp_${RUN}`;
+    let empTypeDenied = false;
+    try { await leaveTypes.createLeaveType(qaEmpType, { name: "Employee QA Leave", maxDays: 1 }, { uid: empUid, email: empEmail, role: "employee" }); } catch { empTypeDenied = true; }
+    t("employee cannot create leave type (rules)", empTypeDenied);
     // Regression: employee submit must be allowed end-to-end (hold ledger row
     // is owned by the employee; rules previously demanded reviewer on create).
     const empApp = await leaves.submitLeave({
@@ -219,9 +251,10 @@ const out = await run(async () => {
     t("employee hold recorded in own balance", empBal.pending === 1);
     await auth.signOut();
     await auth.signIn("admin@example.com", "Admin123!");
+    await leaveTypes.removeLeaveType(qaEmpType, admin).catch(() => {});
     const logs = await repo.list("auditLogs", { limit: 100 });
     const acts = new Set(logs.map((l) => l.action));
-    for (const a of ["application_submitted", "application_for_final_approval", "application_approved", "application_rejected", "application_cancelled", "user_deleted"]) {
+    for (const a of ["application_submitted", "application_for_final_approval", "application_approved", "application_rejected", "application_cancelled", "user_deleted", "leave_type_created", "leave_type_updated", "leave_type_removed"]) {
       t("audit has " + a, acts.has(a));
     }
   } catch (e) {

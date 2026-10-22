@@ -54,7 +54,7 @@ export async function signIn(email, password) {
     await mod.signOut(auth);
     throw new Error("Account is deactivated.");
   }
-  const sess = { uid: cred.user.uid, email: profile.email || cred.user.email, name: profile.name, role: profile.role, department: profile.department, position: profile.position, employeeNo: profile.employeeNo };
+  const sess = { uid: cred.user.uid, email: profile.email || cred.user.email, name: profile.name || "", role: profile.role, department: profile.department || "", position: profile.position || "", employeeNo: profile.employeeNo || "" };
   setLocalSession(sess);
   emit(sess);
   return { uid: cred.user.uid, ...toPublicUser({ id: cred.user.uid, ...profile }) };
@@ -114,7 +114,7 @@ async function validateCloudSession() {
     setLocalSession(null);
     return null;
   }
-  const sess = { uid: fbUser.uid, email: profile.email || fbUser.email, name: profile.name, role: profile.role, department: profile.department, position: profile.position, employeeNo: profile.employeeNo };
+  const sess = { uid: fbUser.uid, email: profile.email || fbUser.email, name: profile.name || "", role: profile.role, department: profile.department || "", position: profile.position || "", employeeNo: profile.employeeNo || "" };
   setLocalSession(sess);
   return sess;
 }

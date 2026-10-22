@@ -161,7 +161,11 @@ async function renderRequests() {
   const apps = await myApplications(user.uid, filter);
   const box = qs("#req-list", app);
   box.innerHTML = apps.length ? apps.map(requestCard).join("") : emptyState("📭", filter === "pending" ? "No pending requests" : "Nothing here");
-  qsa("[data-id] .view-btn", box).forEach((v) => (v.onclick = (e) => { e.stopPropagation(); openDetail(v.dataset.id); }));
+  qsa("[data-id]", box).forEach((c) => {
+    c.onclick = () => openDetail(c.dataset.id);
+    const v = c.querySelector(".view-btn");
+    if (v) v.onclick = (e) => { e.stopPropagation(); openDetail(c.dataset.id); };
+  });
 }
 
 async function openDetail(id) {
@@ -186,7 +190,7 @@ async function openDetail(id) {
     </dl>
     ${attachable ? `<div class="card" style="padding:12px;margin-top:8px">
       <p class="sec-label">Attach a document</p>
-      <input type="file" id="attach-input" accept=".pdf,.jpg,.jpeg,.png" style="width:100%">
+      <input type="file" id="attach-input" aria-label="Attach document" accept=".pdf,.jpg,.jpeg,.png" style="width:100%">
       <p id="attach-err" style="display:none;color:var(--danger);font-size:13px"></p>
     </div>` : ""}
     <h4>Approval timeline</h4>${timelineHtml(d.approvals)}
@@ -254,17 +258,23 @@ function renderWizard() {
     }
     const bals = await myBalances(user.uid).catch(() => []);
     const remByCode = new Map(bals.map((b) => [b.leaveTypeCode, b.remaining]));
-    const days = state.startDate && state.endDate ? calcWorkingDays(state.startDate, state.endDate, holidaysCache) : 0;
-    const lt = typesCache.find((t) => (t.code || t.id) === state.leaveTypeCode);
-    const draft = {
-      startDate: state.startDate, endDate: state.endDate, reason: state.reason,
-      emergencyName: state.emergencyName, emergencyPhone: state.emergencyPhone,
-      leaveType: lt ? { code: lt.code || lt.id, requiresDoc: lt.requiresDoc } : null,
-      details: state.details, documents: state.documents, charLimit: (settingsCache && settingsCache.charLimit) || 500,
+    const currentValidation = () => {
+      const days = state.startDate && state.endDate ? calcWorkingDays(state.startDate, state.endDate, holidaysCache) : 0;
+      const lt = typesCache.find((t) => (t.code || t.id) === state.leaveTypeCode);
+      const draft = {
+        startDate: state.startDate, endDate: state.endDate, reason: state.reason,
+        emergencyName: state.emergencyName, emergencyPhone: state.emergencyPhone,
+        leaveType: lt ? { code: lt.code || lt.id, requiresDoc: lt.requiresDoc } : null,
+        details: state.details, documents: state.documents, charLimit: (settingsCache && settingsCache.charLimit) || 500,
+      };
+      const errs = lt ? validateApplication(draft) : ["Choose a leave type"];
+      return { days, lt, errs, valid: errs.length === 0 && days > 0 };
     };
-    const errs = lt ? validateApplication(draft) : ["Choose a leave type"];
-    const valid = errs.length === 0 && days > 0;
+    const { days, lt, errs, valid } = currentValidation();
     const fields = LEAVE_DETAIL_FIELDS[state.leaveTypeCode] || [];
+    const reviewHtml = ({ valid: ok, lt: type, errs: problems, days: n }) => ok
+      ? `<div class="card" style="padding:16px"><dl class="kv"><dt>Type</dt><dd>${esc(type.name)}</dd><dt>Dates</dt><dd>${esc(state.startDate)} → ${esc(state.endDate)} (${n} days)</dd></dl></div>`
+      : `<div class="card" style="padding:16px"><ul style="margin:0;padding-left:18px;color:var(--muted);font-size:14px">${(n <= 0 && state.startDate && state.endDate ? ["Selected range has 0 working days"] : problems).map((e) => `<li>${esc(e)}</li>`).join("")}</ul></div>`;
     app.innerHTML = `
     <div class="wiz-head"><button class="icon-btn" id="wiz-back" aria-label="Back">←</button>
       <h2 class="wiz-title">Request Leave</h2><div class="wiz-sub">New Application for Leave</div></div>
@@ -295,31 +305,48 @@ function renderWizard() {
       <label class="sec-label" for="emg-phone">Phone</label><input class="field" id="emg-phone" inputmode="tel" placeholder="+63 9XX XXX XXXX" value="${esc(state.emergencyPhone)}">
     </div></div>
     <div class="emp-sec"><p class="sec-label">4. Detail reason and cover details</p>
-      <textarea class="field ow" id="reason" maxlength="${(settingsCache && settingsCache.charLimit) || 500}">${esc(state.reason)}</textarea>
-      <p style="font-size:12px;color:var(--muted)">Min 8 characters • Written: ${(state.reason || "").length} letters</p></div>
+      <textarea class="field ow" id="reason" aria-label="Reason for leave" maxlength="${(settingsCache && settingsCache.charLimit) || 500}">${esc(state.reason)}</textarea>
+      <p style="font-size:12px;color:var(--muted)">Min 8 characters • Written: <span id="reason-count">${(state.reason || "").length}</span> letters</p></div>
     <div class="emp-sec"><p class="sec-label">5. Supporting documents ${lt && lt.requiresDoc ? "(required)" : ""}</p><div class="card" style="padding:16px">
       <p style="font-size:12px;color:var(--muted);margin:0 0 8px">PDF, JPG or PNG · max 700 KB each</p>
-      <input type="file" id="doc-input" accept=".pdf,.jpg,.jpeg,.png" style="width:100%">
+      <input type="file" id="doc-input" aria-label="Supporting documents" accept=".pdf,.jpg,.jpeg,.png" style="width:100%">
       <p id="doc-err" style="display:none;color:var(--danger);font-size:13px"></p>
       <p id="doc-busy" style="display:none;color:var(--indigo);font-size:13px">Uploading…</p>
       ${(state.documents || []).map((d, i) => `<div class="doc-row"><span class="ow" style="flex:1">${esc(d.fileName)}</span><button class="icon-btn danger" data-rmdoc="${i}" aria-label="Remove">✕</button></div>`).join("")}
     </div></div>
     <div class="emp-sec"><p class="sec-label">6. Review</p>
-      ${valid ? `<div class="card" style="padding:16px"><dl class="kv"><dt>Type</dt><dd>${esc(lt.name)}</dd><dt>Dates</dt><dd>${esc(state.startDate)} → ${esc(state.endDate)} (${days} days)</dd></dl></div>`
-        : `<div class="card" style="padding:16px"><ul style="margin:0;padding-left:18px;color:var(--muted);font-size:14px">${(days <= 0 && state.startDate && state.endDate ? ["Selected range has 0 working days"] : errs).map((e) => `<li>${esc(e)}</li>`).join("")}</ul></div>`}
+      <div id="review-box">${reviewHtml({ valid, lt, errs, days })}</div>
       <div class="submit-wrap"><button class="btn btn-primary submit-btn" id="submit-btn" ${valid ? "" : "disabled"}>Submit Leave Application</button></div>
     </div>`;
     renderNav(notifCache.filter((n) => !n.read).length);
+    const syncFields = () => {
+      const read = (s) => { const n = qs(s); return n ? n.value : undefined; };
+      const start = read("#start"); if (start !== undefined) state.startDate = start;
+      const end = read("#end"); if (end !== undefined) state.endDate = end;
+      const name = read("#emg-name"); if (name !== undefined) state.emergencyName = name;
+      const rel = read("#emg-rel"); if (rel !== undefined) state.emergencyRelationship = rel;
+      const phone = read("#emg-phone"); if (phone !== undefined) state.emergencyPhone = phone;
+      const reason = read("#reason"); if (reason !== undefined) state.reason = reason;
+      qsa("[data-det-input]", app).forEach((inp) => { state.details[inp.dataset.detInput] = inp.value; });
+    };
+    const refreshSummary = () => {
+      const v = currentValidation();
+      const count = qs("#reason-count");
+      if (count) count.textContent = String((state.reason || "").length);
+      const live = qs(".days-live");
+      if (live) live.textContent = state.startDate && state.endDate ? `${v.days} working day${v.days === 1 ? "" : "s"}` : "Pick start and end dates";
+      const box = qs("#review-box");
+      if (box) box.innerHTML = reviewHtml(v);
+      const btn = qs("#submit-btn");
+      if (btn) btn.disabled = !v.valid;
+    };
     qs("#wiz-back").onclick = () => show("home");
-    qsa("[data-type]", app).forEach((b) => (b.onclick = () => { state.leaveTypeCode = b.dataset.type; state.details = {}; saveDraft(state); draw(); }));
-    qsa("[data-det]", app).forEach((b) => (b.onclick = () => { state.details[b.dataset.det] = b.dataset.val; saveDraft(state); draw(); }));
-    qsa("[data-det-input]", app).forEach((inp) => (inp.oninput = debounce(() => { state.details[inp.dataset.detInput] = inp.value; saveDraft(state); }, 250)));
+    qsa("[data-type]", app).forEach((b) => (b.onclick = () => { syncFields(); state.leaveTypeCode = b.dataset.type; state.details = {}; saveDraft(state); draw(); }));
+    qsa("[data-det]", app).forEach((b) => (b.onclick = () => { syncFields(); state.details[b.dataset.det] = b.dataset.val; saveDraft(state); draw(); }));
+    qsa("[data-det-input]", app).forEach((inp) => (inp.oninput = debounce(() => { state.details[inp.dataset.detInput] = inp.value; saveDraft(state); refreshSummary(); }, 250)));
     const restick = debounce(() => {
-      state.startDate = qs("#start").value; state.endDate = qs("#end").value;
-      state.emergencyName = qs("#emg-name").value; state.emergencyRelationship = qs("#emg-rel").value;
-      state.emergencyPhone = qs("#emg-phone").value; state.reason = qs("#reason").value;
-      saveDraft(state); draw();
-    }, 300);
+      syncFields(); saveDraft(state); refreshSummary();
+    }, 250);
     ["#start", "#end", "#emg-name", "#emg-rel", "#emg-phone", "#reason"].forEach((s) => {
       const n = qs(s);
       if (n) {
@@ -348,20 +375,23 @@ function renderWizard() {
         const path = storagePath(user.uid, tmpId, f.name);
         const meta = await upload(f, path);
         state.documents = [...(state.documents || []), { fileName: f.name, path: meta.path, size: meta.size, mimeType: meta.mimeType, applicationId: tmpId }];
-        saveDraft(state);
+        syncFields(); saveDraft(state);
         toast("Document attached", "success");
         draw();
       } catch (err) { fail(err.message || "Upload failed"); }
     };
-    qsa("[data-rmdoc]", app).forEach((b) => (b.onclick = () => { state.documents.splice(+b.dataset.rmdoc, 1); saveDraft(state); draw(); }));
+    qsa("[data-rmdoc]", app).forEach((b) => (b.onclick = () => { syncFields(); state.documents.splice(+b.dataset.rmdoc, 1); saveDraft(state); draw(); }));
     const sub = qs("#submit-btn");
-    if (sub && valid) sub.onclick = async () => {
+    if (sub) sub.onclick = async () => {
+      syncFields(); saveDraft(state);
+      const v = currentValidation();
+      if (!v.valid) { refreshSummary(); return; }
       sub.disabled = true;
       sub.innerHTML = `<span class="spin"></span> Submitting…`;
       try {
         const docs = state.documents || [];
         const { id } = await submitLeave({
-          uid: user.uid, employeeName: user.name, department: user.department, position: user.position,
+          uid: user.uid, employeeName: user.name || "", department: user.department || "", position: user.position || "",
           leaveTypeCode: state.leaveTypeCode, startDate: state.startDate, endDate: state.endDate,
           reason: state.reason.trim(), emergencyName: state.emergencyName.trim(),
           emergencyRelationship: state.emergencyRelationship.trim(), emergencyPhone: state.emergencyPhone.trim(),
@@ -369,7 +399,7 @@ function renderWizard() {
         }, docs.map((d) => ({ fileName: d.fileName, path: d.path, size: d.size, mimeType: d.mimeType, applicationId: "" })));
         draftStore.clearDraft(user.uid);
         Object.assign(state, loadDraft());
-        toast(`Application submitted (${daysLabel(days)})`, "success");
+        toast(`Application submitted (${daysLabel(v.days)})`, "success");
         filter = "pending";
         show("home");
         void id;

@@ -21,10 +21,21 @@ service cloud.firestore {
     function isHr(role) { return role == 'hr_staff' || role == 'hr_admin' || role == 'sys_admin'; }
     function isReviewer(role) { return isHr(role) || role == 'supervisor' || role == 'final_approver'; }
     function isAdmin() { return myRole() == 'hr_admin' || myRole() == 'sys_admin'; }
-    // Owners and approvers may move pending/used; only HR may touch earned.
+    // HR may adjust earned; reviewers may move pending/used for approvals;
+    // owners may move their own pending hold (never used or earned).
+    // Pending must remain mutable by the owner because submit holds and cancel
+    // releases are client-side transactions in this Spark app.
     function editBalance(role, mine) {
-      return isHr(role)
-        || ((isReviewer(role) || mine) && request.resource.data.earned == resource.data.earned);
+      return request.resource.data.uid == resource.data.uid
+        && request.resource.data.leaveTypeCode == resource.data.leaveTypeCode
+        && request.resource.data.earned >= 0
+        && request.resource.data.used >= 0
+        && request.resource.data.pending >= 0
+        && (isHr(role)
+          || (isReviewer(role) && request.resource.data.earned == resource.data.earned)
+          || (mine
+            && request.resource.data.earned == resource.data.earned
+            && request.resource.data.used == resource.data.used));
     }
     function editUsers(role) {
       return ((role == 'hr_admin' || role == 'sys_admin')
@@ -73,7 +84,7 @@ service cloud.firestore {
 
     match /leaveTypes/{code} {
       allow read: if signedIn();
-      allow write: if signedIn() && isAdmin();
+      allow write: if signedIn() && isHr(myRole());
     }
     match /holidays/{date} {
       allow read: if signedIn();
@@ -100,23 +111,29 @@ service cloud.firestore {
           || reviewerStageOk(myRole(), resource.data.status, request.resource.data.status));
       allow delete: if false;
 
+      // Review timelines and attachments are private to the applicant and
+      // reviewers - knowing an application id must not expose another user's data.
+      function appOwner() {
+        return signedIn()
+          && get(/databases/$(database)/documents/leaveApplications/$(appId)).data.uid == myUid();
+      }
       match /approvals/{id} {
-        allow read: if signedIn();
+        allow read: if appOwner() || (signedIn() && isReviewer(myRole()));
         allow create: if signedIn() && (isReviewer(myRole()) || request.resource.data.approverUid == myUid());
         allow update, delete: if false;
       }
       match /documents/{id} {
-        allow read: if signedIn();
+        allow read: if appOwner() || (signedIn() && isReviewer(myRole()));
         allow create: if signedIn();
         allow delete: if signedIn() && isReviewer(myRole());
       }
     }
 
-    // earned credits are HR/approver-only; owners may move their own
-    // pending/used (holds and releases on their own applications).
+    // Reviewers need the applicant's balance to decide and to release holds;
+    // owners may read their own rows and only release their own pending hold.
     match /leaveBalances/{id} {
-      allow get: if signedIn() && (!exists(/databases/$(database)/documents/leaveBalances/$(id)) || owner() || isHr(myRole()));
-      allow list: if signedIn() && (isHr(myRole()) || resource.data.uid == myUid());
+      allow get: if signedIn() && (!exists(/databases/$(database)/documents/leaveBalances/$(id)) || owner() || isReviewer(myRole()));
+      allow list: if signedIn() && (isReviewer(myRole()) || resource.data.uid == myUid());
       allow create: if signedIn() && (isReviewer(myRole())
         || (request.resource.data.uid == myUid() && request.resource.data.used == 0 && request.resource.data.pending == 0
           && (request.resource.data.earned == 0
