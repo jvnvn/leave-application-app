@@ -42,9 +42,31 @@ const out = await run(async () => {
     await repo.seedReferenceData();
     const types = await repo.list("leaveTypes", { limit: 20 });
     t("seed: 14 leave types", types.length === 14, String(types.length));
-    const hols = await repo.list("holidays", { limit: 20 });
-    t("seed: 9 holidays", hols.length === 9, String(hols.length));
+    const hols = await repo.list("holidays", { limit: 50 });
+    t("seed: 33 holidays", hols.length === 33, String(hols.length));
+    t("seed: includes observances", hols.some((h) => h.kind === "observance"));
+    t(
+      "seed: 20 non-working dates",
+      hols.filter((h) => h.kind === "regular" || h.kind === "special").length === 20,
+      String(hols.filter((h) => h.kind === "regular" || h.kind === "special").length)
+    );
     const settings = await repo.get("settings", "app");
+    const holidaysSvc = await import("/js/services/holidays.js");
+    const rules = await import("/js/core/rules.js");
+    const nonWorkingDates = await holidaysSvc.holidayDates();
+    t(
+      "holidayDates: includes declared holidays",
+      nonWorkingDates.includes("2026-04-02") && nonWorkingDates.includes("2026-12-24"),
+      String(nonWorkingDates.length)
+    );
+    t(
+      "holidayDates: excludes working kinds",
+      !nonWorkingDates.includes("2026-07-27") && !nonWorkingDates.includes("2026-11-17")
+    );
+    const holyWeek = rules.calcWorkingDays("2026-04-02", "2026-04-04", nonWorkingDates);
+    t("working days: Holy Week counts zero", holyWeek === 0, String(holyWeek));
+    const pagbasa = rules.calcWorkingDays("2026-11-26", "2026-11-27", nonWorkingDates);
+    t("working days: Araw ng Pagbasa counts two", pagbasa === 2, String(pagbasa));
     t("seed: settings/app", !!settings && settings.charLimit === 500);
 
     const qaType = `qa_type_${RUN}`;
@@ -90,7 +112,7 @@ const out = await run(async () => {
     t("upload ok (base64, Spark)", !!meta.path);
     const { id: appId, workingDays } = await leaves.submitLeave({
       uid: supUid, employeeName: "Sam Supervisor", department: "Engineering", position: "Team Lead",
-      leaveTypeCode: "vacation", startDate: "2026-11-02", endDate: "2026-11-03",
+      leaveTypeCode: "vacation", startDate: "2026-11-04", endDate: "2026-11-05",
       reason: "Family trip out of town", emergencyName: "Ana", emergencyRelationship: "Spouse",
       emergencyPhone: "+639170000000", details: { location: "within", where: "Cebu" },
     }, [{ fileName: "note.pdf", path: meta.path, size: meta.size, mimeType: meta.mimeType }]);

@@ -12,7 +12,7 @@
  * Dates of leave stay "YYYY-MM-DD" strings; timestamps convert ISO string
  * <-> Date (stored as Firestore Timestamp) at this boundary only.
  */
-import { calcWorkingDays, canTransition, isCancellable, remaining, reviewActionsFor } from "../core/rules.js";
+import { calcWorkingDays, canTransition, isCancellable, isNonWorkingHoliday, remaining, reviewActionsFor } from "../core/rules.js";
 import { firebaseCtx } from "./firebase-app.js";
 
 const SUBS = { approvals: "approvals", documents: "documents" };
@@ -247,7 +247,9 @@ export const firestoreAdapter = {
     const { fsMod } = fns;
     // Collection/query reads can't run inside a web-SDK transaction — fetch first.
     const holSnap = await fsMod.getDocs(fsMod.collection(db, "holidays"));
-    const holidayDates = holSnap.docs.map((d) => d.id);
+    const holidayDates = holSnap.docs
+      .filter((d) => isNonWorkingHoliday(d.data().kind))
+      .map((d) => d.id);
     return fsMod.runTransaction(db, async (tx) => {
       // All reads first — Firestore forbids reads after writes in a tx.
       const ltSnap = await tx.get(fsMod.doc(db, "leaveTypes", application.leaveTypeCode));
