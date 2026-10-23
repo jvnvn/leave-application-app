@@ -55,7 +55,7 @@
  *     documents/{id}             fileName,path,size,mimeType,uploadedAt
  *   notifications/{id}           uid,title,body,type,read,createdAt
  *   auditLogs/{id}               actorUid,actorEmail,action,entity,entityId,description,meta{},createdAt
- *   holidays/{YYYY-MM-DD}        date,name,kind(regular|special)
+ *   holidays/{YYYY-MM-DD}        date,name,kind(regular|special|special_working|observance)
  *   invites/{token}              uid,email,kind(invite|reset),status(sent|requested),expiresAt,used,createdAt
  *   pendingProfiles/{token}      (firestore mode) profile waiting for invite redemption; users/{uid} is written from it, uid === Auth uid
  *   fileBlobs/{id}               (firestore mode, Spark) path,data(base64),size,mimeType,uid,createdAt — ≤700 KB raw

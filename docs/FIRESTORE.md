@@ -34,7 +34,7 @@ Do this in the console:
 ## 2. Reference data (in-app, once)
 
 Sign in as the sys_admin → **Settings → Seed reference data**.
-Idempotent; creates leave types (14), PH 2026 holidays, departments,
+Idempotent; creates leave types (14), PH 2026 holidays (20 non-working + 13 working), departments,
 `settings/app`. It NEVER creates users or passwords.
 
 ## 3. Emulator testing (recommended before every deploy)
@@ -140,10 +140,10 @@ firebase deploy --only hosting
 filters need no entry. If you add a new `where`+`orderBy` combo and see a
 "missing index" error, add it there and redeploy.
 
-## 9. What was tested (emulator, 38/38 green)
+## 9. What was tested (emulator, 67/67 green)
 
 `tests/e2e-firestore.mjs` (headless Chromium, real app modules):
-admin sign-in → seed (14 types / 9 holidays / settings) → invite →
+admin sign-in → seed (14 types / 33 holidays / settings) → invite →
 pre-auth invite readable, **no users doc before redeem** → redeem creates
 Auth user + matching `users/{uid}` + burned invite + 3 starter balances →
 login → submit with attachment (base64 round-trip) → hold in pending →

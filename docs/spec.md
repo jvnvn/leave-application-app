@@ -1048,6 +1048,18 @@ HR can:
 - Mark regular/special holiday
 - Add description
 
+Holiday kinds:
+
+| Kind | Reduces leave days | Notes |
+|---|---|---|
+| `regular` | Yes | Regular holiday |
+| `special` | Yes | Special non-working day |
+| `special_working` | No | Special working day |
+| `observance` | No | Display-only observance |
+
+Holidays with no `kind` (legacy records) are treated as non-working so
+existing deductions do not change.
+
 The working-day calculator must use configured holidays.
 
 Example:
