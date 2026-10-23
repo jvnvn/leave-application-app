@@ -106,3 +106,11 @@ export const LEAVE_LEGAL_REF = {
   adoption: "R.A. No. 8552",
   others: "Specify",
 };
+
+// Holiday kinds. Only regular/special suspend work; the rest are display-only.
+export const HOLIDAY_KIND_LABELS = {
+  regular: "Regular holiday",
+  special: "Special non-working",
+  special_working: "Special working day",
+  observance: "Observance",
+};

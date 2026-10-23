@@ -65,6 +65,14 @@ export function calcWorkingDays(startISO, endISO, holidayISOs = []) {
   return n;
 }
 
+/** Holiday kinds that suspend work. Everything else counts as a working day. */
+export const NON_WORKING_HOLIDAY_KINDS = new Set(["regular", "special"]);
+
+/** Missing kind keeps legacy documents non-working; unknown kinds stay working. */
+export function isNonWorkingHoliday(kind) {
+  return kind == null || NON_WORKING_HOLIDAY_KINDS.has(kind);
+}
+
 // Zeller-free: days-from-civil algorithm (Howard Hinnant), pure integer math.
 function daysFromCivil(y, m, d) {
   y -= m <= 2 ? 1 : 0;
