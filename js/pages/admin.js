@@ -5,8 +5,8 @@ import { esc, qs, qsa, debounce } from "../core/dom.js";
 import { csvEscape, downloadTextFile, daysLabel } from "../core/format.js";
 import { todayISO, monthGrid, monthLabel, addMonths } from "../core/dates.js";
 import { toast, installGlobalHandlers } from "../core/toast.js";
-import { can, ROLES } from "../core/constants.js";
-import { reviewActionsFor, reviewStage } from "../core/rules.js";
+import { can, ROLES, HOLIDAY_KIND_LABELS } from "../core/constants.js";
+import { isNonWorkingHoliday, reviewActionsFor, reviewStage } from "../core/rules.js";
 import { signOut, adminSetPassword } from "../services/auth.js";
 import { allApplications, applicationDetail } from "../services/leaves.js";
 import { allBalances, allTransactions, transactions, adjust } from "../services/balances.js";
@@ -429,7 +429,7 @@ async function vCal() {
     const apps = await allApplications({ limit: 500 });
     const hols = await listHolidays();
     if (seq !== navSeq) return;
-    const holSet = new Map(hols.map((h) => [h.date || h.id, h.name]));
+    const holSet = new Map(hols.map((h) => [h.date || h.id, { name: h.name, kind: h.kind }]));
     const byDate = new Map();
     for (const a of apps) {
       if (!["APPROVED", "PENDING", "UNDER_REVIEW", "FOR_SUPERVISOR_REVIEW", "FOR_FINAL_APPROVAL"].includes(a.status)) continue;
@@ -446,7 +446,9 @@ async function vCal() {
       if (!iso) return `<div class="cal-day dim"></div>`;
       const list = byDate.get(iso) || [];
       const st = list.some((a) => a.status === "APPROVED") ? "APPROVED" : list.length ? list[0].status : null;
-      return `<button class="cal-day ${st === "APPROVED" ? "has-APPROVED" : st ? "has-PENDING" : ""} ${holSet.get(iso) ? "is-holiday" : ""}" data-day="${esc(iso)}" title="${esc(iso)}" aria-label="${esc(iso)}${list.length ? `, ${list.length} on leave` : ""}">${+iso.slice(8)}</button>`;
+      const hol = holSet.get(iso);
+      const holCls = hol ? (isNonWorkingHoliday(hol.kind) ? "is-holiday" : "is-observance") : "";
+      return `<button class="cal-day ${st === "APPROVED" ? "has-APPROVED" : st ? "has-PENDING" : ""} ${holCls}" data-day="${esc(iso)}" title="${esc(iso)}${hol ? ` - ${esc(hol.name)}` : ""}" aria-label="${esc(iso)}${list.length ? `, ${list.length} on leave` : ""}">${+iso.slice(8)}</button>`;
     }).join("")).join("")}</div><link rel="stylesheet" href="css/employee.css">`;
     qsa("#c-g [data-day]").forEach((b) => (b.onclick = () => {
       const iso = b.dataset.day;
@@ -454,7 +456,7 @@ async function vCal() {
       const hol = holSet.get(iso);
       openSheet(`
         <div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;flex:1">On leave — ${esc(iso)}</h3><button class="icon-btn" data-close aria-label="Close">${xIcon()}</button></div>
-        ${hol ? `<p style="color:var(--muted)">🎉 ${esc(hol)} (holiday)</p>` : ""}
+        ${hol ? `<p style="color:var(--muted)">${isNonWorkingHoliday(hol.kind) ? "🎉 " : ""}${esc(hol.name)} <i>(${esc(HOLIDAY_KIND_LABELS[hol.kind] || hol.kind)})</i></p>` : ""}
         ${list.length ? list.map((a) => `<div class="doc-row">
           <span style="flex:1;min-width:0"><b class="ow">${esc(a.employeeName || "")}</b><br>
           <span style="font-size:12px;color:var(--muted)">${esc(a.leaveTypeName || a.leaveTypeCode || "")} · ${esc(a.startDate || "")} → ${esc(a.endDate || "")}</span></span>
@@ -511,11 +513,13 @@ async function vAudit() {
 async function vHols() {
   const seq = navSeq;
   view.innerHTML = `<div class="card panel"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><h3 style="flex:1;margin:0">Holidays</h3>
-    ${can(user, "holidays.manage") ? `<button class="btn btn-primary btn-sm" id="add-h">Add</button>` : ""}</div><div id="h-out" style="margin-top:12px"></div></div>`;
+    ${can(user, "holidays.manage") ? `<button class="btn btn-primary btn-sm" id="add-h">Add</button>` : ""}</div>
+    <p style="color:var(--muted);font-size:13px;margin:6px 0 0">Only regular and special non-working days reduce leave days. Special working days and observances are display only.</p>
+    <div id="h-out" style="margin-top:12px"></div></div>`;
   const reload = async () => {
     const rows = await listHolidays();
     if (seq !== navSeq) return;
-    qs("#h-out").innerHTML = rows.map((h) => `<div class="doc-row"><span><b>${esc(h.date || h.id)}</b> — <span class="ow">${esc(h.name)}</span> <i>(${esc(h.kind)})</i></span>
+    qs("#h-out").innerHTML = rows.map((h) => `<div class="doc-row"><span><b>${esc(h.date || h.id)}</b> · <span class="ow">${esc(h.name)}</span> <i>(${esc(HOLIDAY_KIND_LABELS[h.kind] || h.kind)})</i></span>
       ${can(user, "holidays.manage") ? `<button class="icon-btn danger" data-del="${esc(h.date || h.id)}" aria-label="Delete">${xIcon()}</button>` : ""}</div>`).join("") || emptyState("📅", "No holidays");
     qsa("[data-del]", view).forEach((b) => (b.onclick = async () => { await removeHoliday(b.dataset.del); toast("Deleted", "success"); reload(); }));
   };
@@ -524,7 +528,7 @@ async function vHols() {
   if (add) add.onclick = () => {
     openModal(`<h3>Add holiday</h3><label class="sec-label">Date</label><input class="field" id="h-d" type="date" style="margin-bottom:8px">
       <label class="sec-label">Name</label><input class="field ow" id="h-n" style="margin-bottom:8px">
-      <label class="sec-label">Kind</label><select class="field" id="h-k"><option value="regular">regular</option><option value="special">special</option></select>
+      <label class="sec-label">Kind</label><select class="field" id="h-k"><option value="regular">Regular holiday (non-working)</option><option value="special">Special non-working day</option><option value="special_working">Special working day</option><option value="observance">Observance (working)</option></select>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" id="h-go">Save</button></div>`);
     qs("#h-go").onclick = async () => {
       try {

@@ -4,10 +4,10 @@
 import { requireEmployee } from "../core/router.js";
 import { esc, qs, qsa, debounce, avatarColor } from "../core/dom.js";
 import { initials, daysLabel } from "../core/format.js";
-import { calcWorkingDays, isCancellable, validateApplication, remaining } from "../core/rules.js";
+import { calcWorkingDays, isCancellable, isNonWorkingHoliday, validateApplication, remaining } from "../core/rules.js";
 import { todayISO, monthGrid, monthLabel, addMonths, parseISODate } from "../core/dates.js";
 import { toast, installGlobalHandlers } from "../core/toast.js";
-import { LEAVE_DETAIL_FIELDS } from "../core/constants.js";
+import { LEAVE_DETAIL_FIELDS, HOLIDAY_KIND_LABELS } from "../core/constants.js";
 import { signOut } from "../services/auth.js";
 import { myApplications, applicationDetail, submitLeave, cancelLeave, addDocument } from "../services/leaves.js";
 import { myBalances } from "../services/balances.js";
@@ -424,11 +424,11 @@ async function renderCalendar() {
       <h3 style="margin:0">${esc(monthLabel(calYear, calMonth))}</h3>
       <button class="icon-btn" id="cal-next" aria-label="Next month">→</button></div>
     <div class="card" style="padding:12px"><div class="cal-grid" id="cal-grid"></div>
-    <div class="cal-legend" style="margin-top:8px"><span>🟩 Approved</span><span>🟨 Pending</span><span>🟧 Holiday</span></div></div></div>`;
+    <div class="cal-legend" style="margin-top:8px"><span>🟩 Approved</span><span>🟨 Pending</span><span>🟧 Holiday</span><span>⬜ Observance</span></div></div></div>`;
   qs("#cal-prev").onclick = () => { [calYear, calMonth] = addMonths(calYear, calMonth, -1); renderCalendar(); };
   qs("#cal-next").onclick = () => { [calYear, calMonth] = addMonths(calYear, calMonth, 1); renderCalendar(); };
   const [apps, hols] = await Promise.all([myApplications(user.uid, "all", 500), listHolidays()]);
-  const holSet = new Map(hols.map((h) => [h.date || h.id, h.name]));
+  const holSet = new Map(hols.map((h) => [h.date || h.id, { name: h.name, kind: h.kind }]));
   const leaveByDate = new Map();
   const stepDay = (iso) => {
     const d = parseISODate(iso);
@@ -456,8 +456,9 @@ async function renderCalendar() {
       const st = mine.find((a) => a.status === "APPROVED") ? "APPROVED" : mine.length ? mine[0].status : null;
       const hol = holSet.get(iso);
       const cls = st === "APPROVED" ? "has-APPROVED" : st ? "has-PENDING" : "";
-      const title = `${iso}${hol ? " — " + hol : ""}${st ? " — " + st : ""}`;
-      return `<button class="cal-day ${cls} ${hol ? "is-holiday" : ""}" data-day="${esc(iso)}" title="${esc(title)}" aria-label="${esc(title)}">${+iso.slice(8)}</button>`;
+      const holCls = hol ? (isNonWorkingHoliday(hol.kind) ? "is-holiday" : "is-observance") : "";
+      const title = `${iso}${hol ? " - " + hol.name : ""}${st ? " - " + st : ""}`;
+      return `<button class="cal-day ${cls} ${holCls}" data-day="${esc(iso)}" title="${esc(title)}" aria-label="${esc(title)}">${+iso.slice(8)}</button>`;
     }).join("")).join("");
   qsa("#cal-grid [data-day]").forEach((b) => (b.onclick = () => {
     const iso = b.dataset.day;
@@ -465,7 +466,7 @@ async function renderCalendar() {
     const hol = holSet.get(iso);
     openSheet(`
       <div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;flex:1">${esc(iso)}</h3><button class="icon-btn" data-close aria-label="Close">${xIcon()}</button></div>
-      ${hol ? `<p style="color:var(--muted)">🎉 ${esc(hol)} (holiday)</p>` : ""}
+      ${hol ? `<p style="color:var(--muted)">${isNonWorkingHoliday(hol.kind) ? "🎉 " : ""}${esc(hol.name)} <i>(${esc(HOLIDAY_KIND_LABELS[hol.kind] || hol.kind)})</i></p>` : ""}
       ${mine.length ? mine.map((a) => `<div class="doc-row">
         <span style="flex:1;min-width:0"><b class="ow">${esc(a.leaveTypeName || a.leaveTypeCode || "")}</b><br>
         <span style="font-size:12px;color:var(--muted)">${esc(a.startDate || "")} → ${esc(a.endDate || "")}</span></span>

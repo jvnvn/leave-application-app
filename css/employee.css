@@ -100,6 +100,7 @@ button.cal-day { color: inherit; padding: 0; cursor: pointer; min-height: 44px; 
 .cal-day.has-APPROVED { background: var(--green-tint); font-weight: 800; }
 .cal-day.has-PENDING { background: var(--pending-bg); font-weight: 800; }
 .cal-day.is-holiday { border-color: var(--orange); }
+.cal-day.is-observance { border-color: var(--line); border-style: dashed; color: var(--muted); }
 .cal-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--muted); }
 
 /* Timeline */
